@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,15 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-import androidx.compose.material.icons.filled.Share
-
 @Composable
-fun DocumentDetailScreen(
-    docId: Long,
-    onBack: () -> Unit,
-    onNavigateToCompressionSettings: (Long, Int, Long) -> Unit,
-    viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-) {
+fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
     LaunchedEffect(docId) { viewModel.load(docId) }
     val ui by viewModel.ui.collectAsState()
     Scaffold(
@@ -54,12 +48,11 @@ fun DocumentDetailScreen(
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { onNavigateToCompressionSettings(docId, ui.pageCount, ui.originalSize) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = ui.document != null
+                    OutlinedButton(
+                        onClick = { viewModel.exportAsJpg() },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export")
+                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export as JPG")
                     }
                 } }
                 Card { Column(Modifier.padding(12.dp)) {

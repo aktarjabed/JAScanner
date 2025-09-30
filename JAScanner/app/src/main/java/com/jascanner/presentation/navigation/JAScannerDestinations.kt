@@ -7,7 +7,5 @@ object JAScannerDestinations {
     const val SETTINGS_ROUTE = "settings"
     const val EDITOR_ROUTE = "editor/{docId}"
     fun editorRoute(id: Long) = "editor/$id"
-    const val COMPRESSION_SETTINGS_ROUTE = "compression/{docId}/{pageCount}/{originalSize}"
-    fun compressionSettingsRoute(id: Long, pageCount: Int, originalSize: Long) = "compression/$id/$pageCount/$originalSize"
 }
 

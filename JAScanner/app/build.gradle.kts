@@ -96,10 +96,6 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
 
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
-    implementation("com.quickbirdstudios:opencv:4.5.3.0")
-    implementation("androidx.webkit:webkit:1.8.0")
-    implementation("io.coil-kt:coil:2.5.0")
-    implementation("io.coil-kt:coil-gif:2.5.0")
 
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
