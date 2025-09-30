@@ -37,4 +37,3 @@ fun JAScannerNavigation(navController: NavHostController, documentListViewModel:
         }
     }
 }
-

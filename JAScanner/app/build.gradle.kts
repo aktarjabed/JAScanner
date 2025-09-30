@@ -95,6 +95,8 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
 
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
     implementation("androidx.biometric:biometric:1.2.0-alpha05")

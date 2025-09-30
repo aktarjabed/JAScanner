@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,6 +46,13 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
                         Button(onClick = { /* Provide chain & TSA UI externally */ }, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add LTV Sign")
                         }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.exportAsJpg() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export as JPG")
                     }
                 } }
                 Card { Column(Modifier.padding(12.dp)) {
