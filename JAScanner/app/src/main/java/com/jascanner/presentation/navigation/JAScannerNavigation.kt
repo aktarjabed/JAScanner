@@ -1,9 +1,13 @@
 package com.jascanner.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.jascanner.compression.presentation.AdvancedCompressionScreen
 import com.jascanner.presentation.screens.camera.CameraScreen
 import com.jascanner.presentation.screens.documents.DocumentDetailScreen
 import com.jascanner.presentation.screens.documents.DocumentListScreen
@@ -33,8 +37,33 @@ fun JAScannerNavigation(navController: NavHostController, documentListViewModel:
         }
         composable(JAScannerDestinations.EDITOR_ROUTE) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("docId")?.toLongOrNull() ?: 0L
-            com.jascanner.presentation.screens.documents.DocumentDetailScreen(id) { navController.popBackStack() }
+            DocumentDetailScreen(
+                docId = id,
+                onBack = { navController.popBackStack() },
+                onNavigateToCompressionSettings = { docId, pageCount, originalSize ->
+                    navController.navigate(JAScannerDestinations.compressionSettingsRoute(docId, pageCount, originalSize))
+                }
+            )
+        }
+        composable(
+            route = JAScannerDestinations.COMPRESSION_SETTINGS_ROUTE,
+            arguments = listOf(
+                navArgument("docId") { type = NavType.LongType },
+                navArgument("pageCount") { type = NavType.IntType },
+                navArgument("originalSize") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val docId = backStackEntry.arguments?.getLong("docId") ?: 0L
+            val pageCount = backStackEntry.arguments?.getInt("pageCount") ?: 0
+            val originalSize = backStackEntry.arguments?.getLong("originalSize") ?: 0L
+
+            AdvancedCompressionScreen(
+                docId = docId,
+                pageCount = pageCount,
+                estimatedOriginalSize = originalSize,
+                viewModel = hiltViewModel(),
+                onCancel = { navController.popBackStack() }
+            )
         }
     }
 }
-

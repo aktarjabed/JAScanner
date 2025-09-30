@@ -14,8 +14,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.material.icons.filled.Share
+
 @Composable
-fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+fun DocumentDetailScreen(
+    docId: Long,
+    onBack: () -> Unit,
+    onNavigateToCompressionSettings: (Long, Int, Long) -> Unit,
+    viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
     LaunchedEffect(docId) { viewModel.load(docId) }
     val ui by viewModel.ui.collectAsState()
     Scaffold(
@@ -45,6 +52,14 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
                         Button(onClick = { /* Provide chain & TSA UI externally */ }, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add LTV Sign")
                         }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { onNavigateToCompressionSettings(docId, ui.pageCount, ui.originalSize) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = ui.document != null
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export")
                     }
                 } }
                 Card { Column(Modifier.padding(12.dp)) {

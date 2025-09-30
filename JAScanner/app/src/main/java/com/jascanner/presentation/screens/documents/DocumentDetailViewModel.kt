@@ -25,7 +25,22 @@ class DocumentDetailViewModel @Inject constructor(
 
     fun load(docId: Long) = viewModelScope.launch {
         documentRepository.getDocumentById(docId).collect { doc ->
-            _ui.value = _ui.value.copy(document = doc, isLoading = false, error = if (doc == null) "Not found" else null)
+            if (doc != null) {
+                val file = File(doc.filePath)
+                _ui.value = _ui.value.copy(
+                    document = doc,
+                    isLoading = false,
+                    error = null,
+                    pageCount = 1, // Assuming one image per document for now
+                    originalSize = if (file.exists()) file.length() else 0L
+                )
+            } else {
+                _ui.value = _ui.value.copy(
+                    document = null,
+                    isLoading = false,
+                    error = "Not found"
+                )
+            }
         }
     }
 
@@ -59,6 +74,8 @@ class DocumentDetailViewModel @Inject constructor(
 data class DocumentDetailUiState(
     val isLoading: Boolean = false,
     val document: com.jascanner.data.entities.DocumentEntity? = null,
+    val pageCount: Int = 0,
+    val originalSize: Long = 0,
     val error: String? = null,
     val message: String? = null,
     val exportedFile: File? = null,
