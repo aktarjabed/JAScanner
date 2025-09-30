@@ -2,23 +2,36 @@ package com.jascanner.presentation.screens.documents
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selectable.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import com.jascanner.export.ExportFormat
+import com.jascanner.export.QualityProfile
 
 @Composable
 fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
     LaunchedEffect(docId) { viewModel.load(docId) }
     val ui by viewModel.ui.collectAsState()
+    var showExportDialog by remember { mutableStateOf(false) }
+
+    if (showExportDialog) {
+        ExportSettingsDialog(
+            onDismiss = { showExportDialog = false },
+            onConfirm = { format, quality ->
+                viewModel.exportImage(format, quality)
+                showExportDialog = false
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -49,10 +62,10 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { viewModel.exportAsJpg() },
+                        onClick = { showExportDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export as JPG")
+                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export Image")
                     }
                 } }
                 Card { Column(Modifier.padding(12.dp)) {
@@ -68,3 +81,68 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
     }
 }
 
+@Composable
+private fun ExportSettingsDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (ExportFormat, QualityProfile) -> Unit
+) {
+    var selectedFormat by remember { mutableStateOf(ExportFormat.JPG) }
+    var selectedQuality by remember { mutableStateOf(QualityProfile.BALANCED) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Export Settings", style = MaterialTheme.typography.titleLarge)
+
+                // Format Selector
+                Text("Format", style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ExportFormat.values().forEach { format ->
+                        Row(
+                            Modifier.selectable(
+                                selected = (format == selectedFormat),
+                                onClick = { selectedFormat = format }
+                            ).padding(horizontal = 8.dp)
+                        ) {
+                            RadioButton(selected = (format == selectedFormat), onClick = null)
+                            Text(text = format.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+
+                // Quality Selector
+                Text("Quality", style = MaterialTheme.typography.titleMedium)
+                Column {
+                    QualityProfile.values().forEach { quality ->
+                        Row(
+                             Modifier.fillMaxWidth().selectable(
+                                selected = (quality == selectedQuality),
+                                onClick = { selectedQuality = quality }
+                            ).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = (quality == selectedQuality), onClick = null)
+                            Text(text = quality.displayName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { onConfirm(selectedFormat, selectedQuality) }) {
+                        Text("Confirm")
+                    }
+                }
+            }
+        }
+    }
+}

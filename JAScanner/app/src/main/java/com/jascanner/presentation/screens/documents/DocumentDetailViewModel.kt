@@ -9,6 +9,9 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jascanner.export.ExportFormat
+import com.jascanner.export.ImageExporter
+import com.jascanner.export.QualityProfile
 import com.jascanner.repository.DocumentRepository
 import com.jascanner.scanner.pdf.PDFGenerator
 import com.jascanner.security.LTVSignatureManager
@@ -29,7 +32,8 @@ class DocumentDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val documentRepository: DocumentRepository,
     private val pdfGenerator: PDFGenerator,
-    private val signatureManager: LTVSignatureManager
+    private val signatureManager: LTVSignatureManager,
+    private val imageExporter: ImageExporter
 ): ViewModel() {
 
     private val _ui = MutableStateFlow(DocumentDetailUiState())
@@ -64,7 +68,7 @@ class DocumentDetailViewModel @Inject constructor(
         _ui.value = _ui.value.copy(signatureInfo = msg, message = if (valid) "✓ Valid & LTV" else "⚠ Not valid")
     }
 
-    fun exportAsJpg() = viewModelScope.launch {
+    fun exportImage(format: ExportFormat, quality: QualityProfile) = viewModelScope.launch {
         val doc = _ui.value.document ?: return@launch
         val inFile = File(doc.filePath)
 
@@ -78,38 +82,21 @@ class DocumentDetailViewModel @Inject constructor(
                 val renderer = PDFRenderer(pdfDocument)
                 val bitmap = renderer.renderImage(0, 1.0f) // Render first page at 1x scale
 
-                val fileName = "${inFile.nameWithoutExtension}.jpg"
-                var success = false
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val resolver = context.contentResolver
-                    val contentValues = ContentValues().apply {
-                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
-                    }
-                    val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                    resolver.openOutputStream(imageUri!!)?.use {
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
-                        success = true
-                    }
-                } else {
-                    val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                    val image = File(imagesDir, fileName)
-                    FileOutputStream(image).use {
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
-                        success = true
-                    }
-                }
+                val success = imageExporter.save(
+                    bitmap = bitmap,
+                    format = format,
+                    quality = quality,
+                    fileName = inFile.nameWithoutExtension
+                )
 
                 if (success) {
-                    _ui.value = _ui.value.copy(message = "JPG exported to Pictures folder")
+                    _ui.value = _ui.value.copy(message = "${format.name} exported to Pictures folder")
                 } else {
-                    _ui.value = _ui.value.copy(error = "Failed to save JPG")
+                    _ui.value = _ui.value.copy(error = "Failed to save ${format.name}")
                 }
             }
         } catch (e: Exception) {
-            _ui.value = _ui.value.copy(error = "Failed to export JPG: ${e.message}")
+            _ui.value = _ui.value.copy(error = "Failed to export ${format.name}: ${e.message}")
         }
     }
 
