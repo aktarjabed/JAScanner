@@ -13,8 +13,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
+import com.jascanner.utils.safeAsImageBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,10 +56,12 @@ fun EditorScreen(
                 if (uiState.isLoading) {
                     CircularProgressIndicator()
                 } else if (uiState.displayedBitmap != null) {
-                    Image(
-                        bitmap = uiState.displayedBitmap!!.asImageBitmap(),
-                        contentDescription = "Document Page"
-                    )
+                    uiState.displayedBitmap?.safeAsImageBitmap()?.let {
+                        Image(
+                            bitmap = it,
+                            contentDescription = "Document Page"
+                        )
+                    }
                 } else if (uiState.error != null) {
                     Text(text = uiState.error!!, color = MaterialTheme.colorScheme.error)
                 }

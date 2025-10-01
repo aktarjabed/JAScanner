@@ -3,8 +3,8 @@ package com.jascanner.edit.presentation.annotation
 import android.graphics.Bitmap
 import android.graphics.PointF
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import com.jascanner.presentation.editor.tools.detectDragGesturesSafe
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,8 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import com.jascanner.utils.safeAsImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.jascanner.edit.domain.model.Annotation
@@ -97,12 +99,11 @@ fun AnnotationScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(currentTool) {
-                        detectDragGestures(
+                        detectDragGesturesSafe(
                             onDragStart = { offset ->
                                 currentPath = listOf(PointF(offset.x, offset.y))
                             },
                             onDrag = { change, _ ->
-                                change.consume()
                                 currentPath = currentPath + PointF(change.position.x, change.position.y)
                             },
                             onDragEnd = {
@@ -128,10 +129,12 @@ fun AnnotationScreen(
                     }
             ) {
                 // Draw bitmap
-                drawImage(
-                    image = bitmap.asImageBitmap(),
-                    dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                )
+                bitmap.safeAsImageBitmap()?.let {
+                    drawImage(
+                        image = it,
+                        dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
+                    )
+                }
 
                 // Draw existing annotations
                 annotations.forEach { annotation ->

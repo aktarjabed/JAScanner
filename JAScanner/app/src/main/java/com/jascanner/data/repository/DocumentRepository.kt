@@ -6,7 +6,7 @@ import javax.inject.Singleton
 
 @Singleton
 class DocumentRepository @Inject constructor() {
-    suspend fun getEditableDocument(documentId: String): EditableDocument? {
+    suspend fun loadEditableDocument(documentId: String): EditableDocument? {
         // TODO: Implement actual data fetching
         return null
     }

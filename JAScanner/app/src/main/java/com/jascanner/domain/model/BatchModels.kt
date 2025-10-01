@@ -1,5 +1,14 @@
 package com.jascanner.domain.model
 
+enum class BatchOperation {
+    APPLY_FILTER,
+    ROTATE,
+    COMPRESS,
+    WATERMARK,
+    MERGE,
+    CONVERT_TO_PDF
+}
+
 data class BatchOperationConfig(
     val continueOnError: Boolean = true
 )

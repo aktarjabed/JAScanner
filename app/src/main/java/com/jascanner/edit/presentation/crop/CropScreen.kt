@@ -4,8 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import com.jascanner.presentation.editor.tools.detectDragGesturesSafe
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import com.jascanner.utils.safeAsImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -69,12 +71,11 @@ fun CropScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
-                        detectDragGestures(
+                        detectDragGesturesSafe(
                             onDragStart = { offset ->
                                 dragHandle = detectHandle(offset, cropRect, size.width.toFloat(), size.height.toFloat())
                             },
                             onDrag = { change, dragAmount ->
-                                change.consume()
                                 dragHandle?.let { handle ->
                                     cropRect = updateCropRect(cropRect, handle, dragAmount, bitmap.width.toFloat(), bitmap.height.toFloat())
                                 }
@@ -86,10 +87,12 @@ fun CropScreen(
                     }
             ) {
                 // Draw bitmap
-                drawImage(
-                    image = bitmap.asImageBitmap(),
-                    dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                )
+                bitmap.safeAsImageBitmap()?.let {
+                    drawImage(
+                        image = it,
+                        dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
+                    )
+                }
 
                 // Draw overlay
                 drawRect(
