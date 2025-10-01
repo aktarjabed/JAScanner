@@ -8,6 +8,7 @@ import androidx.room.Room
 import com.jascanner.data.database.JAScannerDatabase
 import com.jascanner.data.dao.DocumentDao
 import com.jascanner.data.dao.ScanSessionDao
+import com.jascanner.editor.DocumentEditor
 import com.jascanner.repository.DocumentRepository
 import com.jascanner.repository.SettingsRepository
 import com.jascanner.scanner.pdf.PDFAGenerator
@@ -37,5 +38,6 @@ object AppModule {
     @Provides @Singleton fun providePDFGenerator(@ApplicationContext ctx: Context, pdfa: PDFAGenerator, sign: LTVSignatureManager) = PDFGenerator(ctx, pdfa, sign)
     @Provides @Singleton fun provideDocRepo(docDao: DocumentDao, sessionDao: ScanSessionDao, fm: FileManager) = DocumentRepository(docDao, sessionDao, fm)
     @Provides @Singleton fun provideSettingsRepo(ds: DataStore<Preferences>) = SettingsRepository(ds)
+    @Provides @Singleton fun provideDocumentEditor(): DocumentEditor = DocumentEditor()
 }
 

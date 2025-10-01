@@ -6,8 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+fun DocumentDetailScreen(
+    docId: Long,
+    onBack: () -> Unit,
+    onNavigateToEditor: (Long) -> Unit,
+    viewModel: DocumentDetailViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
     LaunchedEffect(docId) { viewModel.load(docId) }
     val ui by viewModel.ui.collectAsState()
     Scaffold(
@@ -24,7 +29,14 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
             TopAppBar(
                 title = { Text(ui.document?.title ?: "Document", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = null) } },
-                actions = { IconButton(onClick = viewModel::verify) { Icon(Icons.Default.VerifiedUser, contentDescription = null) } }
+                actions = {
+                    IconButton(onClick = { onNavigateToEditor(docId) }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                    }
+                    IconButton(onClick = viewModel::verify) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = null)
+                    }
+                }
             )
         }
     ) { pad ->
@@ -46,13 +58,6 @@ fun DocumentDetailScreen(docId: Long, onBack: () -> Unit, viewModel: DocumentDet
                         Button(onClick = { /* Provide chain & TSA UI externally */ }, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add LTV Sign")
                         }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.exportAsJpg() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Export as JPG")
                     }
                 } }
                 Card { Column(Modifier.padding(12.dp)) {
