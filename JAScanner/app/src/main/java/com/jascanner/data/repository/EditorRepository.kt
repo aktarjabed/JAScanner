@@ -7,6 +7,8 @@ import com.itextpdf.kernel.pdf.PdfDocument
 import com.jascanner.domain.model.EditableDocument
 import com.jascanner.domain.model.EditablePage
 import com.jascanner.presentation.editor.ExportSettings
+import com.jascanner.editor.DocumentEditor
+import com.jascanner.domain.model.EditorResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
@@ -15,8 +17,27 @@ import javax.inject.Singleton
 
 @Singleton
 class EditorRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val documentEditor: DocumentEditor
 ) {
+
+    suspend fun rotatePage(
+        document: EditableDocument,
+        pageIndex: Int,
+        degrees: Float
+    ): EditorResult<EditableDocument> {
+        val page = document.pages.getOrNull(pageIndex) ?: return EditorResult.Error(com.jascanner.domain.model.EditorError.InvalidOperation("Page not found"))
+        val bitmap = page.processedBitmap ?: page.originalBitmap ?: return EditorResult.Error(com.jascanner.domain.model.EditorError.InvalidOperation("No bitmap to rotate"))
+
+        return when(val result = documentEditor.rotateBitmap(document.id, page.pageId, bitmap, degrees)) {
+            is EditorResult.Success -> {
+                val updatedPage = page.copy(processedBitmap = result.data)
+                val updatedPages = document.pages.toMutableList().apply { set(pageIndex, updatedPage) }
+                EditorResult.Success(document.copy(pages = updatedPages))
+            }
+            is EditorResult.Error -> result
+        }
+    }
 
     private suspend fun addPageWithAnnotations(
         pdfDocument: PdfDocument,

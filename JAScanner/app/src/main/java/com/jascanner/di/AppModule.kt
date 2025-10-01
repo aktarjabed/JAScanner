@@ -4,7 +4,11 @@ import android.content.Context
 import com.jascanner.data.local.JAScannerDatabase
 import com.jascanner.data.local.DocumentDao
 import com.jascanner.editor.DocumentEditor
-import com.jascanner.presentation.presets.PresetsManager
+import com.jascanner.data.managers.PresetsManager
+import com.jascanner.scanner.pdf.PDFGenerator
+import com.jascanner.data.repository.DocumentRepository
+import com.jascanner.scanner.thz.TerahertzScanner
+import com.jascanner.security.LTVSignatureManager
 import com.jascanner.utils.FileManager
 import com.jascanner.utils.PerformanceMonitor
 import dagger.Module
@@ -62,5 +66,31 @@ object AppModule {
         @ApplicationContext context: Context
     ): PerformanceMonitor {
         return PerformanceMonitor(context)
+    }
+
+    @Provides
+    @Singleton
+    fun providePdfGenerator(): PDFGenerator {
+        return PDFGenerator()
+    }
+
+    @Provides
+    @Singleton
+    fun provideLtvSignatureManager(): LTVSignatureManager {
+        return LTVSignatureManager()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTerahertzScanner(): TerahertzScanner {
+        return TerahertzScanner()
+    }
+
+    @Provides
+    @Singleton
+    fun provideDocumentRepository(
+        documentDao: DocumentDao
+    ): DocumentRepository {
+        return DocumentRepository(documentDao)
     }
 }

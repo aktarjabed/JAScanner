@@ -93,6 +93,40 @@ class EditorViewModel @Inject constructor(
         loadDocument()
     }
 
+    fun rotate(degrees: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentDoc = _document.value ?: return@launch
+            val result = editorRepository.rotatePage(currentDoc, _currentPageIndex.value, degrees)
+            if (result is EditorResult.Success) {
+                _document.value = result.data
+            } else if (result is EditorResult.Error) {
+                // Handle error state
+                _uiState.value = EditorUiState.Error(
+                    message = result.error.message,
+                    error = result.error.cause ?: Exception(result.error.message),
+                    recoverable = true
+                )
+            }
+        }
+    }
+
+    fun save() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _document.value?.let {
+                documentRepository.saveEditableDocument(it)
+                // TODO: Show a success message
+            }
+        }
+    }
+
+    fun crop() {
+        // TODO: Implement crop logic
+    }
+
+    fun applyFilter() {
+        // TODO: Implement filter logic
+    }
+
     override fun onCleared() {
         super.onCleared()
         // Cleanup resources
