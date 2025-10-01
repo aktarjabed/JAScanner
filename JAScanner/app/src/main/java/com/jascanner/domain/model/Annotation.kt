@@ -2,6 +2,17 @@ package com.jascanner.domain.model
 
 import android.graphics.PointF
 
+enum class StampType {
+    APPROVED,
+    REJECTED,
+    CONFIDENTIAL,
+    DRAFT,
+    FINAL,
+    URGENT,
+    RECEIVED,
+    SIGNED
+}
+
 sealed class Annotation {
     abstract val id: String
     abstract val pageId: String
@@ -22,4 +33,12 @@ sealed class Annotation {
         val endPoint: PointF,
         val arrowHeadSize: Float = 20f
     ) : Annotation()
+}
+
+enum class ShapeType(val displayName: String) {
+    RECTANGLE("Rectangle"),
+    CIRCLE("Circle"),
+    ELLIPSE("Ellipse"),
+    ARROW("Arrow"),
+    LINE("Line")
 }
