@@ -37,7 +37,7 @@ class DeviceCapabilitiesDetector @Inject constructor(
         if (_capabilities == null) {
             _capabilities = detectCapabilities()
         }
-        return _capabilities!!
+        return _capabilities ?: DeviceCapabilities()
     }
 
     private fun detectCapabilities(): DeviceCapabilities {

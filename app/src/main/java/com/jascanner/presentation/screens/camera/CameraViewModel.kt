@@ -125,7 +125,9 @@ class CameraViewModel @Inject constructor(
 
                     // Process the best image
                     bestResult.file?.let { file ->
-                        processImage(bestResult.bitmap!!, file)
+                        bestResult.bitmap?.let { bitmap ->
+                            processImage(bitmap, file)
+                        }
                     }
                 } else {
                     _uiState.value = _uiState.value.copy(

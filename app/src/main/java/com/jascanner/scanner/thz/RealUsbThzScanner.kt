@@ -42,20 +42,21 @@ class RealUsbThzScanner @Inject constructor(
                 }
             }
             
-            if (usbDevice == null) {
+            val currentDevice = usbDevice
+            if (currentDevice == null) {
                 Timber.w("No supported THz scanner found")
                 return false
             }
-            
+
             // Initialize connection to the device
-            isConnected = connectToDevice(usbManager, usbDevice!!)
-            
+            isConnected = connectToDevice(usbManager, currentDevice)
+
             if (isConnected) {
-                Timber.i("Real THz scanner initialized: ${usbDevice!!.deviceName}")
+                Timber.i("Real THz scanner initialized: ${currentDevice.deviceName}")
                 // Send initialization commands to the device
                 sendInitializationCommands()
             }
-            
+
             isConnected
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize real THz scanner")

@@ -2,6 +2,7 @@ package com.jascanner.di
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.jascanner.BuildConfig
 import com.jascanner.network.CloudSyncService
 import dagger.Module
 import dagger.Provides
@@ -43,7 +44,7 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, gson: Gson): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://api.jascanner.com/v1/")
+            .baseUrl(BuildConfig.API_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
