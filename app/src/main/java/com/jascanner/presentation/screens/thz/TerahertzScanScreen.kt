@@ -10,8 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import com.jascanner.utils.safeAsImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.jascanner.presentation.components.*
@@ -203,13 +203,15 @@ private fun ScanResultsSection(
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "THz Scan Image",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                    )
+                    bitmap.safeAsImageBitmap()?.let {
+                        Image(
+                            bitmap = it,
+                            contentDescription = "THz Scan Image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        )
+                    }
                 }
             }
         }
