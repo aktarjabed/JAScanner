@@ -87,6 +87,11 @@ class SecurityManager @Inject constructor(
         return try {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
             keyStore.load(null)
+
+            if (!keyStore.containsAlias(KEYSTORE_ALIAS)) {
+                Timber.e("Keystore alias not found. Cannot encrypt.")
+                return null
+            }
             
             val secretKey = keyStore.getKey(KEYSTORE_ALIAS, null) as SecretKey
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -106,6 +111,11 @@ class SecurityManager @Inject constructor(
         return try {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
             keyStore.load(null)
+
+            if (!keyStore.containsAlias(KEYSTORE_ALIAS)) {
+                Timber.e("Keystore alias not found. Cannot decrypt.")
+                return null
+            }
             
             val secretKey = keyStore.getKey(KEYSTORE_ALIAS, null) as SecretKey
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")

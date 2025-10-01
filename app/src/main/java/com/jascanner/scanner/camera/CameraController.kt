@@ -13,12 +13,14 @@ import com.jascanner.device.DeviceCapabilitiesDetector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 @Singleton
 class CameraController @Inject constructor(
@@ -55,23 +57,33 @@ class CameraController @Inject constructor(
     private val focusEvaluator = FocusEvaluator()
 
     suspend fun initialize(): Boolean {
-        return try {
-            val provider = ProcessCameraProvider.getInstance(context).get()
-            cameraProvider = provider
-            
-            val capabilities = deviceCapabilities.getCapabilities()
-            _state.value = _state.value.copy(
-                isInitialized = true,
-                hasFlash = capabilities.hasFlash,
-                error = null
-            )
-            
-            Timber.i("Camera initialized successfully")
-            true
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize camera")
-            _state.value = _state.value.copy(error = e.message)
-            false
+        return suspendCancellableCoroutine { continuation ->
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
+                    cameraProvider = cameraProviderFuture.get()
+                    val capabilities = deviceCapabilities.getCapabilities()
+                    _state.value = _state.value.copy(
+                        isInitialized = true,
+                        hasFlash = capabilities.hasFlash,
+                        error = null
+                    )
+                    Timber.i("Camera initialized successfully")
+                    if (continuation.isActive) {
+                        continuation.resume(true)
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to initialize camera")
+                    _state.value = _state.value.copy(error = e.message)
+                    if (continuation.isActive) {
+                        continuation.resume(false)
+                    }
+                }
+            }, ContextCompat.getMainExecutor(context))
+
+            continuation.invokeOnCancellation {
+                cameraProviderFuture.cancel(true)
+            }
         }
     }
 

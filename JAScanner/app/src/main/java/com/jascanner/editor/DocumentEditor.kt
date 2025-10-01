@@ -1,57 +1,99 @@
 package com.jascanner.editor
 
-import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfName
-import com.itextpdf.kernel.pdf.PdfNumber
-import com.itextpdf.kernel.pdf.PdfReader
-import com.itextpdf.kernel.pdf.PdfWriter
+import android.content.Context
+import android.graphics.*
+import android.net.Uri
+import com.jascanner.domain.model.EditorError
+import com.jascanner.domain.model.EditorResult
+import com.jascanner.utils.BitmapUtils
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DocumentEditor @Inject constructor() {
+class DocumentEditor @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
-    /**
-     * Saves a new PDF with the specified page rotated.
-     * @param inputFile The original PDF file.
-     * @param outputFile The destination for the new, edited PDF file.
-     * @param rotation The total rotation to apply (e.g., 90, 180, 270).
-     * @param pageNum The 1-based page number to rotate.
-     * @return True if successful, false otherwise.
-     */
-    fun saveRotation(inputFile: File, outputFile: File, rotation: Float, pageNum: Int): Boolean {
-        return try {
-            val pdfDoc = PdfDocument(PdfReader(inputFile), PdfWriter(outputFile))
-
-            if (pageNum <= 0 || pageNum > pdfDoc.numberOfPages) {
-                // Handle invalid page number
-                pdfDoc.close()
-                return false
+    suspend fun cropBitmap(
+        documentId: String,
+        pageId: String,
+        bitmap: Bitmap,
+        cropRect: RectF
+    ): EditorResult<Bitmap> = withContext(Dispatchers.Default) {
+        var croppedBitmap: Bitmap? = null
+        try {
+            if (cropRect.width() <= 0 || cropRect.height() <= 0) {
+                return@withContext EditorResult.Error(
+                    EditorError.InvalidOperation("Invalid crop dimensions")
+                )
             }
 
-            val page = pdfDoc.getPage(pageNum)
+            val x = (cropRect.left * bitmap.width).toInt().coerceIn(0, bitmap.width)
+            val y = (cropRect.top * bitmap.height).toInt().coerceIn(0, bitmap.height)
+            val width = (cropRect.width() * bitmap.width).toInt().coerceIn(1, bitmap.width - x)
+            val height = (cropRect.height() * bitmap.height).toInt().coerceIn(1, bitmap.height - y)
 
-            // Get current rotation of the page and add the new rotation.
-            // The final value must be a multiple of 90.
-            val currentRotation = page.rotation ?: 0
-            val newRotation = (currentRotation + rotation.toInt()) % 360
+            croppedBitmap = Bitmap.createBitmap(bitmap, x, y, width, height)
 
-            page.put(PdfName.Rotate, PdfNumber(newRotation))
+            Timber.d("Cropped bitmap: ${width}x${height}")
+            EditorResult.Success(croppedBitmap)
 
-            // This is crucial: If we don't do this, the new PDF will only have one page.
-            // We need to ensure all pages from the source are copied to the destination.
-            // The page we modified is already in the new document, so we don't need to copy it again.
-            // A more efficient way for multi-page documents is to copy all pages first, then modify.
-            // For now, let's keep it simple and assume we're just modifying the one page.
-            // The default behavior of PdfDocument with reader and writer is to copy pages.
-
-            pdfDoc.close()
-            true
+        } catch (e: OutOfMemoryError) {
+            BitmapUtils.recycleSafely(croppedBitmap)
+            System.gc()
+            EditorResult.Error(EditorError.MemoryError("Out of memory", e))
         } catch (e: Exception) {
-            // Proper logging should be used here, e.g., Timber.e(e, "Failed to save rotation")
-            e.printStackTrace()
-            false
+            BitmapUtils.recycleSafely(croppedBitmap)
+            EditorResult.Error(EditorError.OperationFailed("Crop failed", e))
+        }
+    }
+
+    suspend fun rotateBitmap(
+        documentId: String,
+        pageId: String,
+        bitmap: Bitmap,
+        degrees: Float
+    ): EditorResult<Bitmap> = withContext(Dispatchers.Default) {
+        try {
+            val matrix = Matrix().apply { postRotate(degrees) }
+            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            EditorResult.Success(rotatedBitmap)
+        } catch (e: OutOfMemoryError) {
+            System.gc()
+            EditorResult.Error(EditorError.MemoryError("Out of memory", e))
+        } catch (e: Exception) {
+            EditorResult.Error(EditorError.OperationFailed("Rotation failed", e))
+        }
+    }
+
+    suspend fun saveBitmap(
+        documentId: String,
+        bitmap: Bitmap,
+        filename: String,
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
+        quality: Int = 90
+    ): EditorResult<String> = withContext(Dispatchers.IO) {
+        try {
+            val validQuality = quality.coerceIn(0, 100)
+            val docDir = File(context.filesDir, "documents/$documentId")
+            if (!docDir.exists()) {
+                docDir.mkdirs()
+            }
+            val file = File(docDir, filename)
+            FileOutputStream(file).use { out ->
+                bitmap.compress(format, validQuality, out)
+            }
+            val uri = Uri.fromFile(file).toString()
+            EditorResult.Success(uri)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to save bitmap")
+            EditorResult.Error(EditorError.OperationFailed("Save failed", e))
         }
     }
 }

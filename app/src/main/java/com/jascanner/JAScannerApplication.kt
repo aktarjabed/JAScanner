@@ -15,6 +15,9 @@ class JAScannerApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Initialize PDFBox
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(this)
         
         // Initialize Timber logging
         if (BuildConfig.DEBUG) {
