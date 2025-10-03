@@ -16,6 +16,8 @@ import com.jascanner.scanner.ocr.OCRProcessor
 import com.jascanner.scanner.pdf.PDFAGenerator
 import com.jascanner.scanner.pdf.PDFGenerator
 import com.jascanner.security.LTVSignatureManager
+import com.jascanner.core.ErrorHandler
+import com.jascanner.core.MemoryManager
 import com.jascanner.utils.FileManager
 import dagger.Module
 import dagger.Provides
@@ -83,12 +85,19 @@ object AppModule {
     @Provides 
     @Singleton 
     fun provideDocumentRepository(
-        docDao: DocumentDao, 
-        sessionDao: ScanSessionDao, 
-        fm: FileManager
-    ) = DocumentRepository(docDao, sessionDao, fm)
+        @ApplicationContext context: Context,
+        docDao: DocumentDao
+    ) = com.jascanner.data.repository.DocumentRepository(docDao, context)
     
     @Provides 
     @Singleton 
     fun provideSettingsRepository(ds: DataStore<Preferences>) = SettingsRepository(ds)
+
+    @Provides
+    @Singleton
+    fun provideErrorHandler(): ErrorHandler = ErrorHandler()
+
+    @Provides
+    @Singleton
+    fun provideMemoryManager(): MemoryManager = MemoryManager()
 }
