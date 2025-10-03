@@ -5,7 +5,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.jascanner.presentation.screens.camera.CameraScreen
+import com.jascanner.presentation.scanner.ScannerScreen
 import com.jascanner.presentation.screens.documents.DocumentDetailScreen
 import com.jascanner.presentation.screens.documents.DocumentListScreen
 import com.jascanner.presentation.screens.documents.DocumentListViewModel
@@ -17,18 +17,15 @@ fun JAScannerNavigation(navController: NavHostController, documentListViewModel:
     NavHost(navController, startDestination = JAScannerDestinations.DOCUMENTS_ROUTE) {
         composable(JAScannerDestinations.DOCUMENTS_ROUTE) {
             DocumentListScreen(
-                onNavigateToCamera = { navController.navigate(JAScannerDestinations.CAMERA_ROUTE) },
+                onNavigateToCamera = { navController.navigate(JAScannerDestinations.scannerRoute()) },
                 onNavigateToThz = { navController.navigate(JAScannerDestinations.THZ_ROUTE) },
                 onNavigateToSettings = { },
                 onDocumentSelected = { id -> navController.navigate(JAScannerDestinations.documentDetailRoute(id)) },
                 viewModel = documentListViewModel
             )
         }
-        composable(JAScannerDestinations.CAMERA_ROUTE) {
-            CameraScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onDocumentCaptured = { navController.popBackStack() }
-            )
+        composable(JAScannerDestinations.SCANNER_ROUTE) {
+            ScannerScreen(navController = navController)
         }
         composable(JAScannerDestinations.THZ_ROUTE) {
             TerahertzScanScreen(onNavigateBack = { navController.popBackStack() })
