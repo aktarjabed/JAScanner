@@ -54,6 +54,88 @@ fun CaptureButton(
 }
 
 @Composable
+fun PermissionRequestScreen(
+    permissionName: String,
+    rationale: String,
+    onGrantPermission: () -> Unit,
+    onNavigateBack: () -> Unit,
+    icon: ImageVector,
+    showRationale: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "$permissionName Permission Required",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = if (showRationale) {
+                rationale
+            } else {
+                "This app needs $permissionName access to function correctly."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onGrantPermission,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Grant $permissionName Permission")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextButton(onClick = onNavigateBack) {
+            Text("Go Back")
+        }
+    }
+}
+
+@Composable
+fun InitializingScreen(
+    message: String = "Initializing..."
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+            strokeWidth = 4.dp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+
+@Composable
 fun CameraControlButton(
     icon: ImageVector,
     contentDescription: String,

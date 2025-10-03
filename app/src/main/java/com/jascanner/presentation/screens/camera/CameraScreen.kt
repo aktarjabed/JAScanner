@@ -56,14 +56,17 @@ fun CameraScreen(
         when {
             !cameraPermissionState.status.isGranted -> {
                 PermissionRequestScreen(
-                    onRequestPermission = { cameraPermissionState.launchPermissionRequest() },
+                    permissionName = "Camera",
+                    rationale = "Camera access is required to scan documents. Please grant permission to continue.",
+                    onGrantPermission = { cameraPermissionState.launchPermissionRequest() },
                     onNavigateBack = onNavigateBack,
+                    icon = Icons.Default.CameraAlt,
                     showRationale = cameraPermissionState.status.shouldShowRationale
                 )
             }
             
             uiState.isInitializing -> {
-                InitializingScreen()
+                InitializingScreen("Initializing Camera...")
             }
             
             uiState.capturedImage != null -> {
@@ -120,82 +123,6 @@ fun CameraScreen(
     }
 }
 
-@Composable
-private fun PermissionRequestScreen(
-    onRequestPermission: () -> Unit,
-    onNavigateBack: () -> Unit,
-    showRationale: Boolean
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.CameraAlt,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Camera Permission Required",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = if (showRationale) {
-                "Camera access is required to scan documents. Please grant permission to continue."
-            } else {
-                "This app needs camera access to scan documents."
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Button(
-            onClick = onRequestPermission,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Grant Camera Permission")
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        TextButton(onClick = onNavigateBack) {
-            Text("Go Back")
-        }
-    }
-}
-
-@Composable
-private fun InitializingScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(48.dp),
-            strokeWidth = 4.dp
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Initializing Camera...",
-            style = MaterialTheme.typography.bodyLarge
-        )
-    }
-}
 
 @Composable
 private fun CameraPreviewScreen(
