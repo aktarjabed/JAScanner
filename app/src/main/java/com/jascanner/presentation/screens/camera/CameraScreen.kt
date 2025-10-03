@@ -139,16 +139,16 @@ private fun PermissionRequestScreen(
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.primary
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Text(
             text = "Camera Permission Required",
             style = MaterialTheme.typography.headlineSmall
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
             text = if (showRationale) {
                 "Camera access is required to scan documents. Please grant permission to continue."
@@ -158,18 +158,18 @@ private fun PermissionRequestScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         Button(
             onClick = onRequestPermission,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Grant Camera Permission")
         }
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         TextButton(onClick = onNavigateBack) {
             Text("Go Back")
         }
@@ -187,9 +187,9 @@ private fun InitializingScreen() {
             modifier = Modifier.size(48.dp),
             strokeWidth = 4.dp
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Text(
             text = "Initializing Camera...",
             style = MaterialTheme.typography.bodyLarge

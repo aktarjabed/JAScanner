@@ -12,46 +12,60 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
+sealed class EditUiState {
+    object Idle : EditUiState()
+    object Loading : EditUiState()
+    data class Success(val document: EditableDocument) : EditUiState()
+    data class Error(val message: String, val throwable: Throwable? = null) : EditUiState()
+}
+
 class EditViewModel(
     private val repository: EditRepository
 ) : ViewModel() {
 
-    private val _document = MutableStateFlow<EditableDocument?>(null)
-    val document: StateFlow<EditableDocument?> = _document.asStateFlow()
+    private val _uiState = MutableStateFlow<EditUiState>(EditUiState.Idle)
+    val uiState: StateFlow<EditUiState> = _uiState.asStateFlow()
 
     private val _editHistory = MutableStateFlow<List<EditAction>>(emptyList())
     val editHistory: StateFlow<List<EditAction>> = _editHistory.asStateFlow()
 
-    private val _isProcessing = MutableStateFlow(false)
-    val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
+    fun loadDocument(document: EditableDocument) {
+        _uiState.value = EditUiState.Success(document)
+    }
 
     fun performOCR(pageIndex: Int, bitmap: Bitmap) {
+        val currentDoc = (_uiState.value as? EditUiState.Success)?.document ?: return
+
         viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                val textBlocks = repository.performOCR(bitmap)
-                _document.value = _document.value?.let { doc ->
+            _uiState.value = EditUiState.Loading
+            runCatching {
+                repository.performOCR(bitmap)
+            }.onSuccess { textBlocks ->
+                val updatedDoc = currentDoc.let { doc ->
                     val updatedPages = doc.pages.toMutableList()
                     updatedPages[pageIndex] = updatedPages[pageIndex].copy(ocrTextLayer = textBlocks)
                     doc.copy(pages = updatedPages, modifiedAt = System.currentTimeMillis())
                 }
-            } finally {
-                _isProcessing.value = false
+                _uiState.value = EditUiState.Success(updatedDoc)
+            }.onFailure { throwable ->
+                _uiState.value = EditUiState.Error("Failed to perform OCR.", throwable)
             }
         }
     }
 
     fun cropPage(pageIndex: Int, bitmap: Bitmap, cropRect: RectF) {
+        val currentDoc = (_uiState.value as? EditUiState.Success)?.document ?: return
+
         viewModelScope.launch {
-            _isProcessing.value = true
-            try {
+            _uiState.value = EditUiState.Loading
+            runCatching {
                 val croppedBitmap = repository.cropBitmap(bitmap, cropRect)
-                val savedUri = repository.saveBitmap(
+                repository.saveBitmap(
                     croppedBitmap,
                     "cropped_${System.currentTimeMillis()}.png"
                 )
-
-                _document.value = _document.value?.let { doc ->
+            }.onSuccess { savedUri ->
+                val updatedDoc = currentDoc.let { doc ->
                     val updatedPages = doc.pages.toMutableList()
                     updatedPages[pageIndex] = updatedPages[pageIndex].copy(
                         processedImageUri = savedUri,
@@ -63,14 +77,17 @@ class EditViewModel(
                         signatureInvalidated = doc.hasSignature
                     )
                 }
-            } finally {
-                _isProcessing.value = false
+                _uiState.value = EditUiState.Success(updatedDoc)
+            }.onFailure { throwable ->
+                _uiState.value = EditUiState.Error("Failed to crop page.", throwable)
             }
         }
     }
 
     fun addAnnotations(pageIndex: Int, annotations: List<Annotation>) {
-        _document.value = _document.value?.let { doc ->
+        val currentDoc = (_uiState.value as? EditUiState.Success)?.document ?: return
+
+        val updatedDoc = currentDoc.let { doc ->
             val updatedPages = doc.pages.toMutableList()
             updatedPages[pageIndex] = updatedPages[pageIndex].copy(
                 annotations = updatedPages[pageIndex].annotations + annotations
@@ -81,19 +98,23 @@ class EditViewModel(
                 signatureInvalidated = doc.hasSignature
             )
         }
+        _uiState.value = EditUiState.Success(updatedDoc)
     }
 
     fun exportPDF(outputFile: File, onComplete: (Result<File>) -> Unit) {
+        val currentDoc = (_uiState.value as? EditUiState.Success)?.document ?: run {
+            onComplete(Result.failure(IllegalStateException("No document loaded to export.")))
+            return
+        }
+
         viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                _document.value?.let { doc ->
-                    val result = repository.exportSearchablePDF(doc, outputFile)
-                    onComplete(result)
-                }
-            } finally {
-                _isProcessing.value = false
+            _uiState.value = EditUiState.Loading
+            val result = runCatching {
+                repository.exportSearchablePDF(currentDoc, outputFile).getOrThrow()
             }
+            onComplete(result)
+            // Restore previous state after loading
+            _uiState.value = EditUiState.Success(currentDoc)
         }
     }
 
