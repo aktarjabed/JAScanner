@@ -66,83 +66,66 @@ android {
 }
 
 dependencies {
-    // AndroidX core
+    // Core Android & Lifecycle
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
 
-    // Compose BOM
+    // Jetpack Compose
     implementation(platform("androidx.compose:compose-bom:2024.08.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.3.0")
-    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    // Navigation + Hilt
-    implementation("androidx.navigation:navigation-compose:2.7.7")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    // Navigation
+    implementation("androidx.navigation:navigation-compose:2.7.6")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
-    // Hilt
+    // Hilt - Dependency Injection
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-android-compiler:2.51.1")
 
-    // Room
+    // Room - Database
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
 
-    // DataStore
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // WorkManager
+    // WorkManager for background tasks
     implementation("androidx.work:work-runtime-ktx:2.9.1")
-    implementation("androidx.hilt:hilt-work:1.2.0")
-    kapt("androidx.hilt:hilt-compiler:1.2.0")
 
     // CameraX
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+    implementation("androidx.camera:camera-extensions:1.3.1")
 
-    // PDFBox Android (Apache 2.0 License)
-    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // iText 7 for PDF generation
+    implementation("com.itextpdf:itext7-core:7.2.5")
+    implementation("com.itextpdf:pdfa:7.2.5")
 
-    // Bouncy Castle
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    // BouncyCastle for PDF signing/encryption
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
 
-    // ML Kit Text Recognition (Google - Free)
+    // ML Kit Text Recognition (Play Services)
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
 
-    // OpenCV for perspective correction (BSD License)
-    implementation("com.quickbirdstudios:opencv:4.5.3.0")
-
-    // Biometric
+    // Biometric Authentication
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
-    // Images
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Permissions helper
-    implementation("com.google.accompanist:accompanist-permissions:0.36.0")
+    // Accompanist for permissions
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
-    // Logging
+    // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
-    // Network
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // JSON
-    implementation("com.google.code.gson:gson:2.11.0")
-
-    // Test
+    // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
