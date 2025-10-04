@@ -108,8 +108,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
 
-    // PDFBox Android (Apache 2.0 License)
-    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // iText7 PDF Generation
+    implementation("com.itextpdf:kernel:8.0.4")
+    implementation("com.itextpdf:io:8.0.4")
+    implementation("com.itextpdf:layout:8.0.4")
 
     // Bouncy Castle
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
@@ -117,6 +119,7 @@ dependencies {
 
     // ML Kit Text Recognition (Google - Free)
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1-beta")
 
     // OpenCV for perspective correction (BSD License)
     implementation("com.quickbirdstudios:opencv:4.5.3.0")
