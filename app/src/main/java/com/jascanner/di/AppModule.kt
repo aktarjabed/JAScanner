@@ -1,24 +1,11 @@
 package com.jascanner.di
 
-import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
-import androidx.room.Room
+import android.app.Application
+import com.jascanner.ai.ocr.RobustOcrProcessor
+import com.jascanner.core.EnhancedErrorHandler
 import com.jascanner.data.database.JAScannerDatabase
 import com.jascanner.data.dao.DocumentDao
-import com.jascanner.data.dao.ScanSessionDao
-import com.jascanner.repository.DocumentRepository
-import com.jascanner.repository.SettingsRepository
-import com.jascanner.device.DeviceCapabilitiesDetector
-import com.jascanner.scanner.camera.CameraController
-import com.jascanner.scanner.ocr.OCRProcessor
-import com.jascanner.scanner.pdf.PDFAGenerator
-import com.jascanner.scanner.pdf.PDFGenerator
-import com.jascanner.security.LTVSignatureManager
-import com.jascanner.core.ErrorHandler
-import com.jascanner.core.MemoryManager
-import com.jascanner.utils.FileManager
+import com.jascanner.data.dao.ScanDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,78 +13,37 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("settings")
-
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
     
-    @Provides 
-    @Singleton 
-    fun provideDataStore(@ApplicationContext ctx: Context): DataStore<Preferences> = ctx.dataStore
+    @Provides
+    @Singleton
+    fun provideDatabase(@ApplicationContext context: android.content.Context): JAScannerDatabase {
+        return JAScannerDatabase.getInstance(context)
+    }
     
-    @Provides 
-    @Singleton 
-    fun provideDatabase(@ApplicationContext ctx: Context): JAScannerDatabase =
-        Room.databaseBuilder(ctx, JAScannerDatabase::class.java, "jascanner.db")
-            .fallbackToDestructiveMigration()
-            .build()
+    @Provides
+    fun provideDocumentDao(database: JAScannerDatabase): DocumentDao = database.documentDao()
     
-    @Provides 
-    fun provideDocumentDao(db: JAScannerDatabase): DocumentDao = db.documentDao()
+    @Provides
+    fun provideScanDao(database: JAScannerDatabase): ScanDao = database.scanDao()
     
-    @Provides 
-    fun provideScanSessionDao(db: JAScannerDatabase): ScanSessionDao = db.scanSessionDao()
+    @Provides
+    @Singleton
+    fun provideEnhancedErrorHandler(): EnhancedErrorHandler = EnhancedErrorHandler()
     
-    @Provides 
-    @Singleton 
-    fun provideFileManager(@ApplicationContext ctx: Context) = FileManager(ctx)
-    
-    @Provides 
-    @Singleton 
-    fun provideDeviceCapabilities(@ApplicationContext ctx: Context) = DeviceCapabilitiesDetector(ctx)
-    
-    @Provides 
-    @Singleton 
-    fun provideCameraController(@ApplicationContext ctx: Context, dev: DeviceCapabilitiesDetector) = 
-        CameraController(ctx, dev)
-    
-    @Provides 
-    @Singleton 
-    fun provideOCRProcessor(@ApplicationContext ctx: Context) = OCRProcessor(ctx)
-    
-    @Provides 
-    @Singleton 
-    fun providePDFAGenerator(@ApplicationContext ctx: Context) = PDFAGenerator(ctx)
-    
-    @Provides 
-    @Singleton 
-    fun provideSignatureManager(@ApplicationContext ctx: Context) = LTVSignatureManager(ctx)
-    
-    @Provides 
-    @Singleton 
-    fun providePDFGenerator(
-        @ApplicationContext ctx: Context, 
-        pdfa: PDFAGenerator, 
-        sign: LTVSignatureManager
-    ) = PDFGenerator(ctx, pdfa, sign)
-    
-    @Provides 
-    @Singleton 
-    fun provideDocumentRepository(
-        @ApplicationContext context: Context,
-        docDao: DocumentDao
-    ) = com.jascanner.data.repository.DocumentRepository(docDao, context)
-    
-    @Provides 
-    @Singleton 
-    fun provideSettingsRepository(ds: DataStore<Preferences>) = SettingsRepository(ds)
+    @Provides
+    @Singleton
+    fun provideRobustOcrProcessor(errorHandler: EnhancedErrorHandler): RobustOcrProcessor = RobustOcrProcessor(errorHandler)
 
     @Provides
     @Singleton
-    fun provideErrorHandler(): ErrorHandler = ErrorHandler()
+    fun provideApplication(application: Application): Application = application
 
     @Provides
     @Singleton
-    fun provideMemoryManager(): MemoryManager = MemoryManager()
+    fun provideRobustCameraController(application: Application, errorHandler: EnhancedErrorHandler): RobustCameraController {
+        return RobustCameraController(application, errorHandler)
+    }
 }
