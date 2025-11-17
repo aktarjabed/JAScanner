@@ -51,7 +51,7 @@ class ExportWorker @AssistedInject constructor(
         val exportType = inputData.getString(KEY_EXPORT_TYPE) ?: EXPORT_TYPE_PDF_A
         val outputPath = inputData.getString(KEY_OUTPUT_PATH)
         val signWithLTV = inputData.getBoolean(KEY_SIGN_WITH_LTV, false)
-        val tsaUrl = inputData.getString(KEY_TSA_URL) ?: "http://timestamp.sectigo.com"
+        val tsaUrl = inputData.getString(KEY_TSA_URL) ?: "https://timestamp.sectigo.com"
         val certificatePath = inputData.getString(KEY_CERTIFICATE_PATH)
 
         if (documentId == -1L || outputPath == null) {
