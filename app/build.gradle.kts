@@ -22,26 +22,50 @@ android {
     }
 
     buildTypes {
-        debug {
+        getByName("release") {
+            // Enable code shrinking, obfuscation, and optimization
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            // ProGuard/R8 configuration files
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Disable debugging
+            isDebuggable = false
+
+            // BuildConfig fields
+            buildConfigField("String", "API_BASE_URL", "\"https://api.jascanner.production.com/\"")
+            buildConfigField("String", "TSA_URL", "\"https://timestamp.sectigo.com\"")
+        }
+
+        getByName("debug") {
+            // Keep debug builds unobfuscated for easier debugging
             isMinifyEnabled = false
             isDebuggable = true
-            buildConfigField("String", "API_BASE_URL", "\"https://api.jascanner.com/v1/\"")
-        }
-        release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "API_BASE_URL", "\"https://api.jascanner.com/v1/\"")
+
+            // Optional: Add debug suffix
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+
+            // BuildConfig fields
+            buildConfigField("String", "API_BASE_URL", "\"https://api.jascanner.staging.com/\"")
+            buildConfigField("String", "TSA_URL", "\"https://timestamp.sectigo.com\"")
         }
     }
 
+    // Enable ViewBinding and other features
     buildFeatures {
-        compose = true
         viewBinding = true
+        compose = true
         buildConfig = true
     }
 
+    // Kotlin compiler options for Compose
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
+        kotlinCompilerExtensionVersion = "1.5.3"
     }
 
     compileOptions {
@@ -151,4 +175,18 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.08.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+
+    // Unit testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:5.3.1")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.0.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.work:work-testing:2.9.0")
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
+
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }

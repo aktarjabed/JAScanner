@@ -1,0 +1,222 @@
+name: JAScanner Android CI/CD
+
+on:
+push:
+branches:
+- main
+- develop
+- 'release/**'
+pull_request:
+branches:
+- main
+- develop
+workflow_dispatch:
+
+env:
+MAIN_MODULE: app
+APP_NAME: JAScanner
+
+jobs:
+lint:
+name: Lint Check
+runs-on: ubuntu-latest
+
+steps:
+- name: Checkout code
+uses: actions/checkout@v4
+
+- name: Set up JDK 17
+uses: actions/setup-java@v4
+with:
+distribution: 'zulu'
+java-version: '17'
+cache: 'gradle'
+
+- name: Grant execute permission for gradlew
+run: chmod +x ./gradlew
+
+- name: Run Android Lint
+run: ./gradlew lint
+
+- name: Upload Lint reports
+uses: actions/upload-artifact@v4
+if: always()
+with:
+name: lint-reports
+path: ${{ env.MAIN_MODULE }}/build/reports/lint-results-*.html
+
+test:
+name: Unit Tests
+runs-on: ubuntu-latest
+needs: lint
+
+steps:
+- name: Checkout code
+uses: actions/checkout@v4
+
+- name: Set up JDK 17
+uses: actions/setup-java@v4
+with:
+distribution: 'zulu'
+java-version: '17'
+cache: 'gradle'
+
+- name: Grant execute permission for gradlew
+run: chmod +x ./gradlew
+
+- name: Run unit tests
+run: ./gradlew test
+
+- name: Upload test reports
+uses: actions/upload-artifact@v4
+if: always()
+with:
+name: test-reports
+path: ${{ env.MAIN_MODULE }}/build/reports/tests/
+
+security-scan:
+name: Security Scan
+runs-on: ubuntu-latest
+needs: lint
+
+steps:
+- name: Checkout code
+uses: actions/checkout@v4
+
+- name: Run secret scan
+run: |
+echo "🔍 Scanning for hardcoded secrets and sensitive data..."
+
+# Check for potential API keys
+if grep -r -i "api_key\s*=\s*['\"]\\w" . --exclude-dir={.git,.gradle,build} || true; then
+echo "⚠️ Warning: Potential hardcoded API keys found"
+fi
+
+# Check for passwords
+if grep -r -i "password\s*=\s*['\"]\\w" . --exclude-dir={.git,.gradle,build} || true; then
+echo "⚠️ Warning: Potential hardcoded passwords found"
+fi
+
+# Check for HTTP URLs (should use HTTPS)
+if grep -r "http://" . --include="*.kt" --include="*.java" --exclude-dir={.git,.gradle,build} || true; then
+echo "⚠️ Warning: HTTP URLs found - should use HTTPS"
+fi
+
+# Check for debuggable in manifest
+if grep -r 'android:debuggable="true"' . --include="AndroidManifest.xml" || true; then
+echo "❌ ERROR: debuggable=true found in manifest"
+exit 1
+fi
+
+# Check for allowBackup
+if grep -r 'android:allowBackup="true"' . --include="AndroidManifest.xml" || true; then
+echo "⚠️ Warning: allowBackup=true found"
+fi
+
+echo "✅ Security scan completed"
+
+build-debug:
+name: Build Debug APK
+runs-on: ubuntu-latest
+needs: [lint, test]
+
+steps:
+- name: Checkout code
+uses: actions/checkout@v4
+
+- name: Set up JDK 17
+uses: actions/setup-java@v4
+with:
+distribution: 'zulu'
+java-version: '17'
+cache: 'gradle'
+
+- name: Grant execute permission for gradlew
+run: chmod +x ./gradlew
+
+- name: Build debug APK
+run: ./gradlew assembleDebug
+
+- name: Upload debug APK
+uses: actions/upload-artifact@v4
+with:
+name: debug-apk
+path: ${{ env.MAIN_MODULE }}/build/outputs/apk/debug/*.apk
+
+build-release:
+name: Build Release APK & AAB
+runs-on: ubuntu-latest
+needs: [lint, test, security-scan]
+if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+
+steps:
+- name: Checkout code
+uses: actions/checkout@v4
+
+- name: Set up JDK 17
+uses: actions/setup-java@v4
+with:
+distribution: 'zulu'
+java-version: '17'
+cache: 'gradle'
+
+- name: Grant execute permission for gradlew
+run: chmod +x ./gradlew
+
+# Decode keystore from secrets
+- name: Decode keystore
+if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+run: |
+echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+
+- name: Build release APK
+env:
+KEYSTORE_FILE: ${{ github.workspace }}/keystore.jks
+KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+run: ./gradlew assembleRelease
+
+- name: Build release AAB
+env:
+KEYSTORE_FILE: ${{ github.workspace }}/keystore.jks
+KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+run: ./gradlew bundleRelease
+
+- name: Upload release APK
+uses: actions/upload-artifact@v4
+with:
+name: release-apk
+path: ${{ env.MAIN_MODULE }}/build/outputs/apk/release/*.apk
+
+- name: Upload release AAB
+uses: actions/upload-artifact@v4
+with:
+name: release-aab
+path: ${{ env.MAIN_MODULE }}/build/outputs/bundle/release/*.aab
+
+- name: Upload ProGuard mapping files
+uses: actions/upload-artifact@v4
+if: always()
+with:
+name: proguard-mapping
+path: ${{ env.MAIN_MODULE }}/build/outputs/mapping/release/mapping.txt
+
+notify:
+name: Notify Build Status
+runs-on: ubuntu-latest
+needs: [build-debug, build-release]
+if: always()
+
+steps:
+- name: Build Success
+if: ${{ needs.build-debug.result == 'success' && (needs.build-release.result == 'success' || needs.build-release.result == 'skipped') }}
+run: echo "✅ Build completed successfully!"
+
+- name: Build Failed
+if: ${{ needs.build-debug.result == 'failure' || needs.build-release.result == 'failure' }}
+run: |
+echo "❌ Build failed!"
+exit 1
