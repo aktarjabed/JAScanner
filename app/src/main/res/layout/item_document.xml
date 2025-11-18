@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <ImageView
+            android:id="@+id/documentIcon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="PDF icon"
+            android:src="@drawable/ic_pdf"
+            android:tint="@color/purple_500"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/documentNameText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Document.pdf"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/deleteButton"
+            app:layout_constraintStart_toEndOf="@+id/documentIcon"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/documentSizeText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="4dp"
+            android:text="2.5 MB"
+            android:textColor="#666666"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toStartOf="@+id/deleteButton"
+            app:layout_constraintStart_toEndOf="@+id/documentIcon"
+            app:layout_constraintTop_toBottomOf="@+id/documentNameText" />
+
+        <TextView
+            android:id="@+id/documentDateText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="2dp"
+            android:text="2 hours ago"
+            android:textColor="#999999"
+            android:textSize="12sp"
+            app:layout_constraintEnd_toStartOf="@+id/deleteButton"
+            app:layout_constraintStart_toEndOf="@+id/documentIcon"
+            app:layout_constraintTop_toBottomOf="@+id/documentSizeText" />
+
+        <ImageButton
+            android:id="@+id/deleteButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete"
+            android:src="@drawable/ic_delete"
+            android:tint="#F44336"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
