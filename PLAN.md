@@ -29,7 +29,7 @@ Out of scope on purpose: cloud accounts, subscriptions, ads, AI chat, form filli
 | ML Kit | document scanner 16.0.0, text recognition (Latin, Devanagari) 16.0.1, code scanner 16.1.0 |
 | PDFBox-Android | 2.0.27.0 |
 | ZXing core | 3.5.3 |
-| JDK / compileSdk / targetSdk / minSdk | 17 / 36 / 36 / 32 |
+| JDK / compileSdk / targetSdk / minSdk | 17 / 37 / 36 / 32 |
 
 If a version no longer resolves, bump it in the catalog; every module reads it from there.
 

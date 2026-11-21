@@ -4,7 +4,7 @@ All-in-one document scanner and PDF toolkit for Android. Original code, built fr
 
 - **App name:** JAScanner
 - **applicationId / namespace:** `aktarjabed.com.jaascanner`
-- **minSdk:** 32 (Android 12L) · **compileSdk / targetSdk:** 36
+- **minSdk:** 32 (Android 12L) · **compileSdk:** 37 · **targetSdk:** 36
 - **Language:** Kotlin 2.4.0 (AGP 9.4.0 built-in Kotlin, Compose compiler plugin, KSP for Room)
 
 ## What it does

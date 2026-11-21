@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "aktarjabed.com.jaascanner"
-    compileSdk = 36
+    // Compose 1.12 (BOM 2026.09.00) requires compileSdk 37 and AGP 9.2+.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "aktarjabed.com.jaascanner"
