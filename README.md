@@ -52,6 +52,8 @@ This project was **written but not compiled** in the environment that generated 
 
 See `AUDIT.md`: the pure logic (77 unit tests) and the PDF code (on real PDFs, including a 500-page file) were run; the Android parts were not.
 
+A further multi-agent audit after the source was imported to GitHub filed 26 issues. `FIX_PLAN.md` and [issue #1](https://github.com/aktarjabed/JAScanner/issues/1) are the roadmap for fixing them; the app still needs a first successful Gradle sync and device test.
+
 Round 5 was a dedicated bug and robustness sweep of the whole codebase (not tied to one feature): five parallel reviews, one per area, each looking specifically for resource leaks, off-by-one errors, unhandled exceptions, mutation bugs and coroutine-cancellation bugs, followed by an independent re-check of every fix against the real code. 16 confirmed issues were fixed — crashes on malformed input, a search bug that could freeze the whole Library screen, several storage leaks, stale dialog text, and about a dozen places where leaving a screen mid-action was mistaken for a real error. See `AUDIT.md` section 6 for the full list, including what was checked and found to already be correct. As with every other round, none of this could be compiled or run on a device — the pure-Kotlin fixes got new unit tests, the rest got the static checker and close, independently re-checked reading.
 
 `COMPARISON.md` sets JAScanner against the public listings of Adobe Acrobat Reader and Document Scanner – PDF Creator, feature by feature, and says where JAScanner is ahead, level, behind or missing.
