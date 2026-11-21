@@ -106,7 +106,9 @@ object PdfTools {
             val merger = PDFMergerUtility()
             sources.forEach { merger.addSource(it) }
             merger.destinationFileName = target.absolutePath
-            merger.mergeDocuments(MemoryUsageSetting.setupMainMemoryOnly())
+            // Large scans must not be sorted and buffered entirely in the heap. PDFBox spills to
+            // temporary files instead, which keeps a 500+500 page merge possible on a phone.
+            merger.mergeDocuments(MemoryUsageSetting.setupTempFileOnly())
         }
     }
 

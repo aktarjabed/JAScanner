@@ -29,6 +29,8 @@ import aktarjabed.com.jaascanner.pdf.toUserMessage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -125,7 +127,8 @@ class EditorViewModel(
         }
     }
 
-    private val wordCache = HashMap<Int, List<TextWord>>()
+    /** Word taps can arrive from several UI coroutines at once; reads must be thread-safe. */
+    private val wordCache = ConcurrentHashMap<Int, List<TextWord>>()
 
     private fun persist() {
         val current = mutableState.value
@@ -178,21 +181,43 @@ class EditorViewModel(
 
     fun insertDate() = setText(SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date()))
 
-    fun setSignature(bitmap: Bitmap) = mutableState.update { it.copy(signature = bitmap, tool = EditorTool.Signature) }
+    fun setSignature(bitmap: Bitmap) {
+        val previous = mutableState.value.signature
+        mutableState.update { it.copy(signature = bitmap, tool = EditorTool.Signature) }
+        recycleIfUnused(previous)
+    }
 
     /** Loads a picture (logo, photo, stamp) to place on pages. */
     fun setImageFromUri(context: Context, uri: Uri) {
         val appContext = context.applicationContext
         viewModelScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                runCatching { ImageDecoding.decode(appContext, uri, maxSide = 1600) }.getOrNull()
+                try {
+                    ImageDecoding.decode(appContext, uri, maxSide = 1600)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    null
+                }
             }
             if (bitmap == null) {
                 container.messenger.post("That picture could not be read.")
             } else {
+                val previous = mutableState.value.image
                 mutableState.update { it.copy(image = bitmap, tool = EditorTool.Image) }
+                recycleIfUnused(previous)
             }
         }
+    }
+
+    /** A replaced signature/image bitmap may still be waiting in a mark; never recycle that. */
+    private fun recycleIfUnused(bitmap: Bitmap?) {
+        if (bitmap == null || bitmap.isRecycled) return
+        val current = mutableState.value
+        if (current.signature === bitmap || current.image === bitmap) return
+        val stillUsed = { placed: PlacedMark -> (placed.mark as? StampMark)?.bitmap === bitmap }
+        if (current.marks.any(stillUsed) || current.undone.any(stillUsed)) return
+        bitmap.recycle()
     }
 
     fun addMark(page: Int, mark: Mark) {
@@ -232,8 +257,9 @@ class EditorViewModel(
                 }
                 val bitmap = TextBitmaps.render(current.text, current.penColor, face = current.textFace)
                 rememberText(current.text)
-                val lines = current.text.lines().size
-                val widthFraction = (bitmap.width.toFloat() / bitmap.height) * TEXT_HEIGHT_FRACTION * current.textScale * lines
+                // The bitmap already contains every line, so its aspect ratio covers the height
+                // of the whole label; multiplying by the line count made multi-line text huge.
+                val widthFraction = (bitmap.width.toFloat() / bitmap.height) * TEXT_HEIGHT_FRACTION * current.textScale
                 StampMark(bitmap, u, v, widthFraction = widthFraction.coerceIn(0.05f, 0.95f))
             }
             EditorTool.EditText -> {
@@ -256,12 +282,18 @@ class EditorViewModel(
         val source = current.source ?: return
         viewModelScope.launch {
             val picked = withContext(Dispatchers.IO) {
-                runCatching {
-                    val words = wordCache[page] ?: PDDocument.load(container.documents.fileOf(document)).use {
-                        PdfTextRuns.analyse(it, page).words
-                    }.also { wordCache[page] = it }
+                try {
+                    val words = wordCache.computeIfAbsent(page) {
+                        PDDocument.load(container.documents.fileOf(document)).use { pdf ->
+                            PdfTextRuns.analyse(pdf, page).words
+                        }
+                    }
                     PdfTextRuns.wordAt(words, u, v)
-                }.getOrNull()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    null
+                }
             }
             if (picked == null) {
                 container.messenger.post(
@@ -330,9 +362,14 @@ class EditorViewModel(
         mutableState.update { it.copy(pending = null) }
         viewModelScope.launch {
             val outcome = if (face == null) {
-                withContext(Dispatchers.IO) {
-                    runCatching { PdfTextReplace.check(container.documents.fileOf(document), pending.word, clean) }
-                        .getOrElse { PdfTextReplace.Outcome.Unsupported("could not analyse the page") }
+                try {
+                    withContext(Dispatchers.IO) {
+                        PdfTextReplace.check(container.documents.fileOf(document), pending.word, clean)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    PdfTextReplace.Outcome.Unsupported("could not analyse the page")
                 }
             } else {
                 null
@@ -377,6 +414,9 @@ class EditorViewModel(
                 }
                 container.messenger.post("Saved as a new copy. The original is unchanged.$textNote")
                 withContext(Dispatchers.Main) { onSaved(saved.id) }
+            } catch (error: CancellationException) {
+                target.delete()
+                throw error
             } catch (error: Throwable) {
                 target.delete()
                 container.messenger.post(error.toUserMessage())

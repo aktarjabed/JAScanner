@@ -149,7 +149,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setFavoriteMany(ids: Collection<Long>, favorite: Boolean) {
         viewModelScope.launch {
-            ids.forEach { documents.setFavorite(it, favorite) }
+            documents.setFavorite(ids.toList(), favorite)
             selection.value = emptySet()
         }
     }
@@ -176,6 +176,10 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun createFolder(name: String, thenMove: Collection<Long> = emptyList(), parentId: Long? = null) {
         viewModelScope.launch {
             val id = documents.createFolder(name, parentId)
+            if (id == null) {
+                container.messenger.post("Enter a folder name.")
+                return@launch
+            }
             if (thenMove.isNotEmpty()) {
                 documents.moveToFolder(thenMove.toList(), id)
                 selection.value = emptySet()

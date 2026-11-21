@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import aktarjabed.com.jaascanner.container
 import aktarjabed.com.jaascanner.core.findActivity
 import aktarjabed.com.jaascanner.pdf.ImageDecoding
 import aktarjabed.com.jaascanner.pdf.ImageFilter
+import aktarjabed.com.jaascanner.pdf.toUserMessage
 import aktarjabed.com.jaascanner.scan.ScannerLauncher
 import aktarjabed.com.jaascanner.ui.AppViewModel
 import aktarjabed.com.jaascanner.ui.containerViewModel
@@ -74,16 +76,26 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
     val scope = rememberCoroutineScope()
     val vm = containerViewModel { CardScanViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
-    var target by remember { mutableIntStateOf(0) }
+    // Survives process death: a picture taken after a restart must still go to the right side.
+    var target by rememberSaveable { mutableIntStateOf(0) }
+    val targetSide = target.takeIf { it in state.sides.indices }
 
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val uri = ScannerLauncher.parseCardResult(result.data)
-            if (uri == null) container.messenger.post("No picture was captured.") else vm.setSide(context, target, uri)
+            val index = targetSide
+            if (uri == null) {
+                container.messenger.post("No picture was captured.")
+            } else if (index == null) {
+                container.messenger.post("That side is no longer available.")
+            } else {
+                vm.setSide(context, index, uri)
+            }
         }
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) vm.setSide(context, target, uri)
+        val index = targetSide
+        if (uri != null && index != null) vm.setSide(context, index, uri)
     }
 
     val scanSide: (Int) -> Unit = { index ->
@@ -147,6 +159,11 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
                         }
                     }
                 }
+                state.pictureError?.let { error ->
+                    item {
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = vm::addSide, enabled = state.sides.size < MAX_SIDES) { Text("Add a side") }
@@ -184,20 +201,36 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
 @Composable
 private fun SidePreview(file: File) {
     val context = LocalContext.current
+    val container = context.container
+    var failed by remember(file) { mutableStateOf(false) }
     val bitmap by produceState<Bitmap?>(null, file) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { ImageDecoding.decode(context, file.toUri(), maxSide = 700) }.getOrNull()
+        val decoded = withContext(Dispatchers.IO) {
+            try {
+                Result.success(ImageDecoding.decode(context, file.toUri(), maxSide = 700))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }
+        if (decoded.isSuccess) {
+            value = decoded.getOrNull()
+        } else {
+            decoded.exceptionOrNull()?.let { container.messenger.post(it.toUserMessage()) }
+            failed = true
         }
     }
     val shown = bitmap
-    if (shown == null) {
-        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
-    } else {
-        Image(
+    when {
+        shown != null -> Image(
             bitmap = shown.asImageBitmap(),
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth().height(160.dp),
         )
+        failed -> Text("Preview unavailable", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        else -> Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.size(24.dp))
+        }
     }
 }

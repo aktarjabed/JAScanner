@@ -20,8 +20,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Which operation produced the text currently on screen. */
+enum class OcrSource { None, Document, Image }
+
 data class OcrUiState(
     val document: DocumentEntity? = null,
+    val resultSource: OcrSource = OcrSource.None,
     val language: OcrLanguage = OcrLanguage.Latin,
     /** Recognised text, one entry per page (a single entry for a picture). */
     val pages: List<String> = emptyList(),
@@ -54,6 +58,9 @@ class OcrViewModel(
     val state: StateFlow<OcrUiState> = mutableState.asStateFlow()
     private var job: Job? = null
 
+    /** Incremented for every read; only the newest run may publish progress or final state. */
+    private var generation = 0
+
     init {
         viewModelScope.launch {
             val language = container.settings.settings.first().ocrLanguage
@@ -65,6 +72,7 @@ class OcrViewModel(
                     document = document,
                     language = language,
                     pages = if (earlier.isNotBlank()) listOf(earlier) else emptyList(),
+                    resultSource = if (earlier.isNotBlank()) OcrSource.Document else OcrSource.None,
                     hasRun = earlier.isNotBlank(),
                 )
             }
@@ -79,14 +87,18 @@ class OcrViewModel(
 
     fun readDocument() {
         val document = mutableState.value.document ?: return
-        start {
+        val language = mutableState.value.language
+        start { token ->
             val pages = container.ocr.recognizePdfPages(
                 file = container.documents.fileOf(document),
-                language = mutableState.value.language,
+                language = language,
                 maxPages = MAX_PAGES,
-            ) { done, total -> mutableState.update { it.copy(progress = done to total) } }
-            mutableState.update {
+            ) { done, total ->
+                if (token == generation) mutableState.update { it.copy(progress = done to total) }
+            }
+            if (token == generation) mutableState.update {
                 it.copy(
+                    resultSource = OcrSource.Document,
                     pages = pages.map { page -> page.text },
                     lines = pages.mapIndexed { index, page -> index to page.lines }.toMap(),
                 )
@@ -96,33 +108,46 @@ class OcrViewModel(
 
     fun readImage(context: Context, uri: Uri) {
         val appContext = context.applicationContext
-        start {
-            val text = container.ocr.recognizeImage(appContext, uri, mutableState.value.language)
-            mutableState.update { it.copy(pages = listOf(text), lines = emptyMap()) }
+        val language = mutableState.value.language
+        start { token ->
+            val text = container.ocr.recognizeImage(appContext, uri, language)
+            if (token == generation) mutableState.update {
+                it.copy(resultSource = OcrSource.Image, pages = listOf(text), lines = emptyMap())
+            }
         }
     }
 
-    private fun start(work: suspend () -> Unit) {
+    private fun start(work: suspend (Int) -> Unit) {
         job?.cancel()
-        mutableState.update { it.copy(running = true, error = null, progress = null) }
+        val token = ++generation
+        // Clear the old source as well: while a new read runs, document-only actions must not
+        // act on text left over from the previous (possibly picture) read.
+        mutableState.update {
+            it.copy(running = true, error = null, progress = null, hasRun = false, resultSource = OcrSource.None)
+        }
         job = viewModelScope.launch {
             try {
-                work()
-                mutableState.update { it.copy(hasRun = true) }
-            } catch (error: kotlinx.coroutines.CancellationException) {
+                work(token)
+                if (token == generation) mutableState.update { it.copy(hasRun = true) }
+            } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                mutableState.update { it.copy(error = error.toUserMessage()) }
+                if (token == generation) mutableState.update { it.copy(error = error.toUserMessage()) }
             } finally {
-                mutableState.update { it.copy(running = false, progress = null) }
+                if (token == generation) mutableState.update { it.copy(running = false, progress = null) }
             }
         }
     }
 
     /** Stores the text so the library search can find this document. */
     fun makeSearchable() {
-        val document = mutableState.value.document ?: return
-        val text = mutableState.value.plainText
+        val current = mutableState.value
+        val document = current.document ?: return
+        if (current.resultSource != OcrSource.Document || current.running) {
+            container.messenger.post("Read this document first; text from a picture is not indexed.")
+            return
+        }
+        val text = current.plainText
         if (text.isBlank()) {
             container.messenger.post("There is no text to index.")
             return
@@ -142,6 +167,10 @@ class OcrViewModel(
         val current = mutableState.value
         val document = current.document ?: return
         if (current.embedding || current.running) return
+        if (current.resultSource != OcrSource.Document) {
+            container.messenger.post("Read this document first; a picture has no page positions to embed.")
+            return
+        }
         if (!current.canEmbed) {
             container.messenger.post("Read the document first; the positions of the words are needed for the searchable copy.")
             return
@@ -160,7 +189,7 @@ class OcrViewModel(
                     container.messenger.post("Every page that was read already has text, so nothing was added.")
                     return@launch
                 }
-                val pagesDone = PdfTextLayer.add(source, target, wanted)
+                val layer = PdfTextLayer.add(source, target, wanted)
                 val saved = container.documents.registerOutput(
                     file = target,
                     name = document.name + " (searchable)",
@@ -168,7 +197,14 @@ class OcrViewModel(
                     folderId = document.folderId,
                 )
                 container.documents.setOcrText(saved.id, current.plainText.take(MAX_INDEX_CHARS))
-                container.messenger.post("Saved a searchable copy ($pagesDone pages got a text layer). The original is unchanged.")
+                val dropped = if (layer.hasDroppedCharacters) {
+                    " Some characters could not be drawn: ${layer.droppedCharacters.take(12)}."
+                } else {
+                    ""
+                }
+                container.messenger.post(
+                    "Saved a searchable copy (${layer.pagesWritten} pages got a text layer). The original is unchanged.$dropped",
+                )
             } catch (error: CancellationException) {
                 target.delete()
                 throw error

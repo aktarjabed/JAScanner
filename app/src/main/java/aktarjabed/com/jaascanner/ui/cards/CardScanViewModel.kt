@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,8 @@ data class CardScanState(
     val onePage: Boolean = true,
     val filter: ImageFilter = ImageFilter.Enhanced,
     val saving: Boolean = false,
+    /** Set when a camera/gallery picture could not be copied, so the screen can show a real error. */
+    val pictureError: String? = null,
 )
 
 const val MAX_SIDES = 20
@@ -52,8 +55,12 @@ class CardScanViewModel(private val container: AppContainer) : ViewModel() {
         if (current.sides.size >= MAX_SIDES) current else current.copy(sides = current.sides + CardSide(sideLabel(current.sides.size)))
     }
 
-    fun removeLastSide() = mutableState.update { current ->
-        if (current.sides.size <= 1) current else current.copy(sides = current.sides.dropLast(1))
+    fun removeLastSide() {
+        val current = mutableState.value
+        if (current.sides.size <= 1) return
+        val removed = current.sides.last().photo
+        mutableState.update { it.copy(sides = it.sides.dropLast(1)) }
+        removed?.delete()
     }
 
     fun setOnePage(value: Boolean) = mutableState.update { it.copy(onePage = value) }
@@ -72,25 +79,36 @@ class CardScanViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Copies the picture into private storage right away: scanner and picker URIs are short-lived. */
     fun setSide(context: Context, index: Int, uri: Uri) {
+        if (index !in mutableState.value.sides.indices) return
         val appContext = context.applicationContext
+        mutableState.update { it.copy(pictureError = null) }
         container.appScope.launch {
             val copy = withContext(Dispatchers.IO) {
-                runCatching {
-                    val dir = File(appContext.cacheDir, "cards").apply { mkdirs() }
-                    val file = File(dir, UUID.randomUUID().toString() + ".jpg")
-                    appContext.contentResolver.openInputStream(uri)?.use { input ->
-                        file.outputStream().use { output -> input.copyTo(output) }
-                    } ?: error("no stream")
+                val dir = File(appContext.cacheDir, "cards").apply { mkdirs() }
+                val file = File(dir, UUID.randomUUID().toString() + ".jpg")
+                try {
+                    val stream = appContext.contentResolver.openInputStream(uri) ?: error("no stream")
+                    stream.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
                     file
-                }.getOrNull()
+                } catch (error: CancellationException) {
+                    file.delete()
+                    throw error
+                } catch (error: Exception) {
+                    file.delete()
+                    null
+                }
             }
             if (copy == null) {
-                container.messenger.post("That picture could not be read.")
+                mutableState.update { it.copy(pictureError = "That picture could not be read.") }
+            } else if (index !in mutableState.value.sides.indices) {
+                // The side was removed while the picture was being copied.
+                copy.delete()
             } else {
                 // A rescan of a side that already had a photo must not leak the old cache file.
-                val previous = mutableState.value.sides.getOrNull(index)?.photo
+                val previous = mutableState.value.sides[index].photo
                 mutableState.update { current ->
                     current.copy(
+                        pictureError = null,
                         sides = current.sides.mapIndexed { i, side ->
                             if (i == index) side.copy(photo = copy) else side
                         },
@@ -121,8 +139,13 @@ class CardScanViewModel(private val container: AppContainer) : ViewModel() {
                 if (container.settings.settings.first().autoOcr) container.ocrIndexer.indexInBackground(saved.id)
                 photos.forEach { it.delete() }
                 withContext(Dispatchers.Main) { onSaved(saved.id) }
+            } catch (error: CancellationException) {
+                target.delete()
+                photos.forEach { it.delete() }
+                throw error
             } catch (error: Throwable) {
                 target.delete()
+                photos.forEach { it.delete() }
                 container.messenger.post(error.toUserMessage())
             } finally {
                 mutableState.update { it.copy(saving = false) }
@@ -131,7 +154,8 @@ class CardScanViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     override fun onCleared() {
-        // Pictures that were never saved should not linger in the cache.
+        // Pictures that were never saved should not linger in the cache. A save still in flight
+        // owns its photos: it deletes them if it fails and consumes them if it succeeds.
         if (mutableState.value.saving) return
         mutableState.value.sides.forEach { it.photo?.delete() }
     }

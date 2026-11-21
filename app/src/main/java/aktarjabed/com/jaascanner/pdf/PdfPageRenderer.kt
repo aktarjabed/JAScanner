@@ -47,15 +47,18 @@ class PdfPageRenderer private constructor(
     suspend fun render(index: Int, widthPx: Int): Bitmap? = mutex.withLock {
         if (closed || index !in 0 until pageCount) return@withLock null
         withContext(Dispatchers.IO) {
+            var bitmap: Bitmap? = null
             try {
                 val page = renderer.openPage(index)
                 try {
                     val width = widthPx.coerceAtLeast(1)
                     val height = (width.toFloat() * page.height / page.width).roundToInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                    bitmap.eraseColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    bitmap
+                    val created = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    bitmap = created
+                    created.eraseColor(Color.WHITE)
+                    page.render(created, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap = null // ownership moves to the caller
+                    created
                 } finally {
                     page.close()
                 }
@@ -63,6 +66,9 @@ class PdfPageRenderer private constructor(
                 null
             } catch (error: OutOfMemoryError) {
                 null
+            } finally {
+                // A failed render used to leave this bitmap allocated until the GC noticed it.
+                bitmap?.recycle()
             }
         }
     }

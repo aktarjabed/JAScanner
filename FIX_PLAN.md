@@ -8,6 +8,7 @@ It supersedes the "Plan v2" ordering in `NEXT_PLAN.md` for the next few releases
 
 - Source imported from the delivered ZIP in commit `bc5190e`; 142 tracked files.
 - No Android build has ever succeeded. No APK exists. No device testing has happened.
+- Phase 1 fixes for #5-#15 and #26 are implemented in source, but every issue stays open until Gradle sync, JVM tests, lint and device checks pass on a proper toolchain.
 - The desktop harness tests pure Kotlin logic only; it currently hides compiler errors (issue #4).
 
 ## Verification ladder (every fix climbs as far as it can)

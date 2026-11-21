@@ -62,6 +62,8 @@ fun SignatureDialog(onPick: (Bitmap) -> Unit, onDismiss: () -> Unit) {
 
     var saved by remember { mutableStateOf<List<Pair<File, Bitmap>>>(emptyList()) }
     var reload by remember { mutableIntStateOf(0) }
+    // Picking or saving a signature starts a coroutine; ignore taps until it has been handed over.
+    var picking by remember { mutableStateOf(false) }
     LaunchedEffect(reload) {
         saved = store.list().mapNotNull { file -> store.load(file)?.let { bitmap -> file to bitmap } }
     }
@@ -85,7 +87,10 @@ fun SignatureDialog(onPick: (Bitmap) -> Unit, onDismiss: () -> Unit) {
                                         .width(120.dp)
                                         .height(56.dp)
                                         .background(Color.White)
-                                        .clickable { onPick(bitmap) },
+                                        .clickable(enabled = !picking) {
+                                            picking = true
+                                            onPick(bitmap)
+                                        },
                                 )
                                 TextButton(onClick = {
                                     scope.launch {
@@ -144,14 +149,16 @@ fun SignatureDialog(onPick: (Bitmap) -> Unit, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(
-                enabled = strokes.isNotEmpty(),
+                enabled = strokes.isNotEmpty() && !picking,
                 onClick = {
                     val bitmap = renderSignature(strokes.toList(), inkWidth)
                     if (bitmap != null) {
+                        picking = true
                         scope.launch {
                             try {
                                 store.save(bitmap)
                             } catch (error: CancellationException) {
+                                picking = false
                                 throw error
                             } catch (error: Exception) {
                                 container.messenger.post("Could not save that signature, but it will still be used here.")

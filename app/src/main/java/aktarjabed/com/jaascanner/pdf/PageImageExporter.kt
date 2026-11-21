@@ -7,8 +7,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import aktarjabed.com.jaascanner.core.Formatters
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /** Renders PDF pages to JPEG files, for sharing or saving to the gallery. */
@@ -26,28 +28,42 @@ object PageImageExporter {
     ): List<File> = withContext(Dispatchers.IO) {
         val renderer = PdfPageRenderer.open(pdf)
             ?: throw PdfToolException("Could not open this PDF.")
-        val dir = File(context.cacheDir, "share").apply { mkdirs() }
+        // One private directory per export: exporting the same document twice must never overwrite
+        // the first batch's JPEGs.
+        val batchDir = File(File(context.cacheDir, "share"), UUID.randomUUID().toString()).apply { mkdirs() }
         val safeName = Formatters.safeFileName(baseName)
         val files = mutableListOf<File>()
         try {
-            pages.forEachIndexed { position, index ->
+            val unique = LinkedHashSet<Int>()
+            for (index in pages) {
+                if (index < 0 || index >= renderer.pageCount) {
+                    throw PdfToolException("Page ${index + 1} is outside this document (1-${renderer.pageCount}).")
+                }
+                unique.add(index)
+            }
+            unique.forEachIndexed { position, index ->
                 val bitmap = renderer.render(index, EXPORT_WIDTH_PX)
                     ?: throw PdfToolException("Could not render page ${index + 1}.")
                 try {
-                    val file = File(dir, "$safeName-page-${index + 1}.jpg")
+                    val file = File(batchDir, "$safeName-page-${index + 1}.jpg")
                     file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
                     files.add(file)
                 } finally {
                     bitmap.recycle()
                 }
-                onProgress(position + 1, pages.size)
+                onProgress(position + 1, unique.size)
             }
             files
+        } catch (error: CancellationException) {
+            files.forEach { it.delete() }
+            batchDir.delete()
+            throw error
         } catch (error: Throwable) {
             files.forEach { it.delete() }
+            batchDir.delete()
             throw error
         } finally {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { renderer.release() }
+            withContext(NonCancellable) { renderer.release() }
         }
     }
 

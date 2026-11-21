@@ -97,6 +97,7 @@ fun OcrScreen(app: AppViewModel, documentId: Long?) {
                     FilterChip(
                         selected = state.language == language,
                         onClick = { vm.setLanguage(language) },
+                        enabled = !state.running,
                         label = { Text(if (language == OcrLanguage.Latin) "Latin" else "Devanagari") },
                     )
                 }
@@ -159,12 +160,21 @@ fun OcrScreen(app: AppViewModel, documentId: Long?) {
                     }) { Text("Save .txt") }
                 }
                 if (document != null) {
-                    OutlinedButton(onClick = vm::makeSearchable) { Text("Make this document searchable in the library") }
-                    Button(onClick = vm::saveSearchablePdf, enabled = state.canEmbed && !state.running && !state.embedding) {
+                    val fromDocument = state.resultSource == OcrSource.Document
+                    OutlinedButton(
+                        onClick = vm::makeSearchable,
+                        enabled = fromDocument && !state.running,
+                    ) { Text("Make this document searchable in the library") }
+                    Button(
+                        onClick = vm::saveSearchablePdf,
+                        enabled = fromDocument && state.canEmbed && !state.running && !state.embedding,
+                    ) {
                         Text(if (state.embedding) "Saving..." else "Save a searchable PDF copy")
                     }
                     Text(
-                        if (state.canEmbed) {
+                        if (!fromDocument) {
+                            "This text came from a picture. Read the document to index it or save a searchable copy."
+                        } else if (state.canEmbed) {
                             "The text is hidden under each scanned page, so any PDF reader can search and select it. Your original is not changed."
                         } else {
                             "To save a searchable PDF, tap Read again first: the saved text has no word positions."

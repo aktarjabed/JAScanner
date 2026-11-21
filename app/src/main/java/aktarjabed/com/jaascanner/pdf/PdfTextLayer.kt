@@ -12,11 +12,11 @@ import com.tom_roush.pdfbox.pdmodel.graphics.state.RenderingMode
 import com.tom_roush.pdfbox.util.Matrix
 import java.io.File
 import kotlin.math.atan2
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * One line of recognised text. The box is given as fractions of the page as it is displayed:
+/** One line of recognised text. The box is given as fractions of the page as it is displayed:
  * u to the right and v downwards, both 0..1.
  */
 data class RecognisedLine(
@@ -26,6 +26,14 @@ data class RecognisedLine(
     val u1: Float,
     val v1: Float,
 )
+
+/** Result of embedding recognised text. [droppedCharacters] lists glyphs no available font could draw. */
+data class TextLayerOutcome(
+    val pagesWritten: Int = 0,
+    val droppedCharacters: String = "",
+) {
+    val hasDroppedCharacters: Boolean get() = droppedCharacters.isNotEmpty()
+}
 
 /**
  * Makes a scanned PDF searchable and copyable by adding the recognised text as an invisible layer
@@ -39,15 +47,18 @@ object PdfTextLayer {
     private const val MIN_SIZE_PT = 2f
     private const val MAX_SIZE_PT = 300f
 
-    /** Writes [target] with the text layer added; returns how many lines were written. */
-    suspend fun add(source: File, target: File, lines: Map<Int, List<RecognisedLine>>): Int =
+    /** Writes [target] with the text layer added; reports pages written and glyphs dropped. */
+    suspend fun add(source: File, target: File, lines: Map<Int, List<RecognisedLine>>): TextLayerOutcome =
         withContext(Dispatchers.IO) {
             try {
                 PDDocument.load(source).use { document ->
-                    val written = addTo(document, lines)
+                    val outcome = addTo(document, lines)
                     document.save(target)
-                    written
+                    outcome
                 }
+            } catch (error: CancellationException) {
+                target.delete()
+                throw error
             } catch (error: Throwable) {
                 target.delete()
                 throw error
@@ -55,9 +66,10 @@ object PdfTextLayer {
         }
 
     /** Adds the layer to an open document. Pages outside the document are ignored. */
-    fun addTo(document: PDDocument, lines: Map<Int, List<RecognisedLine>>): Int {
+    fun addTo(document: PDDocument, lines: Map<Int, List<RecognisedLine>>): TextLayerOutcome {
         val fonts = HashMap<String, PDFont>()
-        var written = 0
+        val dropped = LinkedHashSet<Char>()
+        val writtenPages = HashSet<Int>()
         for ((pageIndex, pageLines) in lines) {
             if (pageIndex !in 0 until document.numberOfPages) continue
             val usable = pageLines.filter { it.text.isNotBlank() && it.u1 > it.u0 && it.v1 > it.v0 }
@@ -68,12 +80,18 @@ object PdfTextLayer {
             val rotation = page.rotation
             PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true).use { content ->
                 for (line in usable) {
-                    if (writeLine(document, content, box, rotation, line, fonts)) written++
+                    val result = writeLine(document, content, box, rotation, line, fonts)
+                    if (result.written) writtenPages.add(pageIndex)
+                    dropped.addAll(result.dropped)
                 }
             }
         }
-        return written
+        return TextLayerOutcome(writtenPages.size, dropped.joinToString(""))
     }
+
+    private data class LineOutcome(val written: Boolean, val dropped: Set<Char> = emptySet())
+
+    private data class FontChoice(val font: PDFont, val drawn: String, val dropped: Set<Char>)
 
     private fun writeLine(
         document: PDDocument,
@@ -82,21 +100,22 @@ object PdfTextLayer {
         rotation: Int,
         line: RecognisedLine,
         fonts: HashMap<String, PDFont>,
-    ): Boolean {
+    ): LineOutcome {
         val cleaned = line.text.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ').trim()
-        if (cleaned.isEmpty()) return false
+        if (cleaned.isEmpty()) return LineOutcome(false)
 
         // Everything that can fail is done before the first operator is written, so a bad line can
         // never leave half a text object in the page.
-        val choice = chooseFont(document, cleaned, fonts) ?: return false
-        val font = choice.first
-        val drawn = choice.second
+        val choice = chooseFont(document, cleaned, fonts) ?: return LineOutcome(false, cleaned.filter { !it.isWhitespace() }.toSet())
+        val font = choice.font
+        val drawn = choice.drawn
+        if (drawn.isEmpty()) return LineOutcome(false, choice.dropped)
 
         val displayedWidth = PdfCoordinateMapper.displayedWidth(box, rotation)
         val displayedHeight = if (PdfCoordinateMapper.normalizeRotation(rotation) % 180 == 0) box.height else box.width
         val sizePt = ((line.v1 - line.v0) * displayedHeight * SIZE_OF_BOX).coerceIn(MIN_SIZE_PT, MAX_SIZE_PT)
-        val naturalWidth = runCatching { font.getStringWidth(drawn) / 1000f * sizePt }.getOrNull() ?: return false
-        if (naturalWidth <= 0f) return false
+        val naturalWidth = runCatching { font.getStringWidth(drawn) / 1000f * sizePt }.getOrNull() ?: return LineOutcome(false, choice.dropped)
+        if (naturalWidth <= 0f) return LineOutcome(false, choice.dropped)
         val stretch = ((line.u1 - line.u0) * displayedWidth / naturalWidth).coerceIn(0.05f, 20f)
 
         val baselineV = line.v0 + (line.v1 - line.v0) * BASELINE_FRACTION
@@ -113,19 +132,29 @@ object PdfTextLayer {
         content.showText(drawn)
         content.endText()
         content.restoreGraphicsState()
-        return true
+        return LineOutcome(true, choice.dropped)
     }
 
     /**
      * A font that can encode the whole line (standard Helvetica, else one of the phone's fonts), or
-     * failing that Helvetica with the letters it cannot draw removed. Null when nothing is left.
+     * failing that Helvetica with the letters it cannot draw removed. Dropped letters are reported
+     * instead of vanishing silently.
      */
-    private fun chooseFont(document: PDDocument, text: String, fonts: HashMap<String, PDFont>): Pair<PDFont, String>? {
+    private fun chooseFont(document: PDDocument, text: String, fonts: HashMap<String, PDFont>): FontChoice? {
         val guess = FontGuess(FontKind.Sans, bold = false, italic = false, cleanName = "Helvetica")
-        val picked = SystemFonts.pick(document, guess, text, fonts)
-        if (picked != null) return picked to text
+        SystemFonts.pick(document, guess, text, fonts)?.let { return FontChoice(it, text, emptySet()) }
+
         val helvetica = PDType1Font.HELVETICA
-        val kept = text.filter { ch -> runCatching { helvetica.encode(ch.toString()) }.isSuccess }.trim()
-        return if (kept.isEmpty()) null else helvetica to kept
+        val kept = StringBuilder()
+        val dropped = LinkedHashSet<Char>()
+        for (ch in text) {
+            when {
+                ch.isWhitespace() -> kept.append(' ')
+                runCatching { helvetica.encode(ch.toString()) }.isSuccess -> kept.append(ch)
+                else -> dropped.add(ch)
+            }
+        }
+        val drawn = kept.toString().trim()
+        return if (drawn.isEmpty()) null else FontChoice(helvetica, drawn, dropped)
     }
 }
