@@ -27,20 +27,28 @@ fun TextInputDialog(
     confirmLabel: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Change this whenever the dialog is opened again, so abandoned text is not restored. */
+    dialogKey: Any? = null,
+    error: String? = null,
+    onTextChanged: (String) -> Unit = {},
 ) {
-    // Keyed on `initial`: without this, reopening the dialog at the same call site for a
-    // different target (e.g. "Rename" tapped on a different document) would restore the text
-    // left over from whatever was being edited last time, not that target's real value.
-    var text by rememberSaveable(initial) { mutableStateOf(initial) }
+    // Keyed on both the target's current value and an open nonce. Keying only on `initial` left
+    // cancelled text behind for every dialog whose initial value was an empty string.
+    var text by rememberSaveable(initial, dialogKey) { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = {
+                    text = it
+                    onTextChanged(it)
+                },
                 label = { Text(label) },
                 singleLine = true,
+                isError = error != null,
+                supportingText = error?.let { message -> { Text(message) } },
             )
         },
         confirmButton = {

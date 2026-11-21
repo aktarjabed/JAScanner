@@ -77,6 +77,23 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
     val vm = containerViewModel { ToolViewModel(it, kind, preselected) }
     val state by vm.state.collectAsStateWithLifecycle()
 
+    val validationMessage = vm.validationMessage(state)
+    val pageError = when (kind) {
+        ToolKind.Extract, ToolKind.DeletePages -> vm.pageError(state, allowBlank = false)
+        ToolKind.ExportImages, ToolKind.Rotate, ToolKind.Crop -> vm.pageError(state, allowBlank = true)
+        ToolKind.InsertFromPdf -> vm.insertPageError(state)
+        else -> null
+    }
+    val rangesError = if (kind == ToolKind.Split && state.splitByRanges) vm.rangesError(state) else null
+    val perFileError = if (kind == ToolKind.Split && !state.splitByRanges) vm.perFileError(state) else null
+    val orderError = if (kind == ToolKind.Reorder) vm.orderError(state) else null
+    val insertAfterError = when (kind) {
+        ToolKind.InsertBlank, ToolKind.InsertFromPdf -> vm.insertAfterError(state)
+        else -> null
+    }
+    val blankCountError = if (kind == ToolKind.InsertBlank) vm.blankCountError(state) else null
+    val passwordError = vm.passwordError(state)
+
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         if (uris.isNotEmpty()) vm.addImages(uris)
     }
@@ -205,10 +222,14 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     when (kind) {
-                        ToolKind.Extract, ToolKind.DeletePages -> PageField(state.pageText, "Pages, for example 1-3, 5, 8-", vm::setPageText)
-                        ToolKind.ExportImages -> PageField(state.pageText, "Pages (leave empty for all)", vm::setPageText)
+                        ToolKind.Extract, ToolKind.DeletePages -> PageField(
+                            state.pageText, "Pages, for example 1-3, 5, 8-", vm::setPageText, error = pageError,
+                        )
+                        ToolKind.ExportImages -> PageField(
+                            state.pageText, "Pages (leave empty for all)", vm::setPageText, error = pageError,
+                        )
                         ToolKind.Rotate -> {
-                            PageField(state.pageText, "Pages (leave empty for all)", vm::setPageText)
+                            PageField(state.pageText, "Pages (leave empty for all)", vm::setPageText, error = pageError)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf(90 to "Right 90°", 180 to "Flip 180°", 270 to "Left 90°").forEach { (degrees, label) ->
                                     FilterChip(
@@ -233,20 +254,25 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
                                 )
                             }
                             if (state.splitByRanges) {
-                                PageField(state.rangesText, "Ranges, separated by ; for example 1-3; 4-9; 10", vm::setRangesText)
+                                PageField(
+                                    state.rangesText, "Ranges, separated by ; for example 1-3; 4-9; 10",
+                                    vm::setRangesText, error = rangesError,
+                                )
                             } else {
                                 OutlinedTextField(
                                     value = state.perFile,
                                     onValueChange = vm::setPerFile,
                                     label = { Text("Pages in each file") },
                                     singleLine = true,
+                                    isError = perFileError != null,
+                                    supportingText = perFileError?.let { message -> { Text(message) } },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
                         ToolKind.Reorder -> {
-                            PageField(state.orderText, "New order, for example 3,1,2", vm::setOrderText)
+                            PageField(state.orderText, "New order, for example 3,1,2", vm::setOrderText, error = orderError)
                             Text(
                                 "List every page number once, in the order you want them.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -254,8 +280,14 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
                             )
                         }
                         ToolKind.InsertBlank -> {
-                            PageField(state.insertAfter, "Insert after page (0 = at the start)", vm::setInsertAfter)
-                            PageField(state.blankCount, "How many blank pages", vm::setBlankCount)
+                            PageField(
+                                state.insertAfter, "Insert after page (0 = at the start)",
+                                vm::setInsertAfter, error = insertAfterError, keyboardType = KeyboardType.Number,
+                            )
+                            PageField(
+                                state.blankCount, "How many blank pages", vm::setBlankCount,
+                                error = blankCountError, keyboardType = KeyboardType.Number,
+                            )
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 PageSizeOption.entries.filter { it != PageSizeOption.Fit }.forEach { option ->
                                     FilterChip(
@@ -267,11 +299,14 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
                             }
                         }
                         ToolKind.InsertFromPdf -> {
-                            PageField(state.insertAfter, "Insert after page (0 = at the start)", vm::setInsertAfter)
-                            PageField(state.pageText, "Pages to insert (leave empty for all)", vm::setPageText)
+                            PageField(
+                                state.insertAfter, "Insert after page (0 = at the start)",
+                                vm::setInsertAfter, error = insertAfterError, keyboardType = KeyboardType.Number,
+                            )
+                            PageField(state.pageText, "Pages to insert (leave empty for all)", vm::setPageText, error = pageError)
                         }
                         ToolKind.Crop -> {
-                            PageField(state.pageText, "Pages (leave empty for all)", vm::setPageText)
+                            PageField(state.pageText, "Pages (leave empty for all)", vm::setPageText, error = pageError)
                             Text("Trim ${state.cropPercent}% from each edge", style = MaterialTheme.typography.labelLarge)
                             Slider(
                                 value = state.cropPercent.toFloat(),
@@ -281,14 +316,14 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
                             )
                         }
                         ToolKind.Protect -> {
-                            PasswordField(state.password, "Password (at least 4 characters)", vm::setPassword)
+                            PasswordField(state.password, "Password (at least 4 characters)", vm::setPassword, error = passwordError)
                             Text(
                                 "If you forget this password the file cannot be opened. JAScanner cannot recover it.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        ToolKind.Unlock -> PasswordField(state.password, "Current password", vm::setPassword)
+                        ToolKind.Unlock -> PasswordField(state.password, "Current password", vm::setPassword, error = passwordError)
                         ToolKind.Watermark -> {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
@@ -407,6 +442,13 @@ fun ToolScreen(app: AppViewModel, kind: ToolKind, preselected: List<Long>) {
                         enabled = vm.canRun(state),
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (state.running) "Working..." else "Run") }
+                    if (!state.running && validationMessage != null) {
+                        Text(
+                            validationMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     if (state.running) {
                         val progress = state.progress
                         if (progress != null && progress.second > 0) {
@@ -515,23 +557,34 @@ private fun PictureThumb(uri: android.net.Uri) {
 }
 
 @Composable
-private fun PageField(value: String, label: String, onChange: (String) -> Unit) {
+private fun PageField(
+    value: String,
+    label: String,
+    onChange: (String) -> Unit,
+    error: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         singleLine = true,
+        isError = error != null,
+        supportingText = error?.let { message -> { Text(message) } },
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, autoCorrect = false),
         modifier = Modifier.fillMaxWidth(),
     )
 }
 
 @Composable
-private fun PasswordField(value: String, label: String, onChange: (String) -> Unit) {
+private fun PasswordField(value: String, label: String, onChange: (String) -> Unit, error: String? = null) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         singleLine = true,
+        isError = error != null,
+        supportingText = error?.let { message -> { Text(message) } },
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         modifier = Modifier.fillMaxWidth(),

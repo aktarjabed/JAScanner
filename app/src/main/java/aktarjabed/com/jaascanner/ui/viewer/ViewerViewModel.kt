@@ -19,6 +19,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,12 +61,29 @@ class ViewerViewModel(
     /** Text extraction runs once for the whole document and is shared by every search keystroke. */
     private var extraction: Deferred<List<String>>? = null
     private var searchJob: Job? = null
+    private var panelJob: Job? = null
 
     init {
         viewModelScope.launch { load() }
     }
 
     private suspend fun load() {
+        // Start from a clean slate: a failed re-open must not leave marks or search hits from a
+        // document that is no longer loaded.
+        mutableState.update {
+            it.copy(
+                loading = true,
+                unreadable = false,
+                searchMatches = emptyList(),
+                searchIndex = 0,
+                searching = false,
+                hasTextLayer = null,
+                bookmarks = emptyList(),
+                notes = emptyList(),
+                panelLoading = false,
+                panelBusy = false,
+            )
+        }
         val document = container.documents.get(documentId)
         if (document == null) {
             mutableState.update { it.copy(loading = false, unreadable = true) }
@@ -123,16 +141,25 @@ class ViewerViewModel(
     }
 
     fun search(query: String) {
-        mutableState.update { it.copy(searchQuery = query) }
         searchJob?.cancel()
-        if (query.isBlank()) {
-            mutableState.update { it.copy(searchMatches = emptyList(), searchIndex = 0, searching = false) }
+        // Clear immediately: during the debounce old matches must not look current or let
+        // Next/Prev jump to pages from a previous query.
+        mutableState.update {
+            it.copy(
+                searchQuery = query,
+                searchMatches = emptyList(),
+                searchIndex = 0,
+                searching = query.isNotBlank(),
+                hasTextLayer = null,
+            )
+        }
+        if (query.isBlank()) return
+        val target = file() ?: run {
+            mutableState.update { it.copy(searching = false) }
             return
         }
-        val target = file() ?: return
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
-            mutableState.update { it.copy(searching = true) }
             val texts = pageTexts ?: try {
                 val running = extraction ?: viewModelScope.async { PdfTextExtractor.pageTexts(target) }.also { extraction = it }
                 running.await().also { pageTexts = it }
@@ -143,6 +170,9 @@ class ViewerViewModel(
                 emptyList()
             }
             val matches = PdfTextExtractor.pagesContaining(texts, query)
+            // Cancellation can arrive while the non-suspending match search above is running; do
+            // not publish those results over the next query's freshly cleared state.
+            ensureActive()
             mutableState.update {
                 it.copy(
                     searching = false,
@@ -157,8 +187,11 @@ class ViewerViewModel(
     /** Reads the bookmarks and comments stored in the PDF, for the Marks panel. */
     fun loadPanel() {
         val target = file() ?: return
-        viewModelScope.launch {
-            mutableState.update { it.copy(panelLoading = true) }
+        panelJob?.cancel()
+        panelJob = viewModelScope.launch {
+            mutableState.update {
+                it.copy(panelLoading = true, bookmarks = emptyList(), notes = emptyList())
+            }
             val bookmarks = try {
                 PdfBookmarks.read(target)
             } catch (error: CancellationException) {
@@ -173,6 +206,7 @@ class ViewerViewModel(
             } catch (error: Exception) {
                 emptyList()
             }
+            ensureActive()
             mutableState.update { it.copy(bookmarks = bookmarks, notes = notes, panelLoading = false) }
         }
     }
@@ -210,9 +244,23 @@ class ViewerViewModel(
                     val old = mutableState.value.source
                     pageTexts = null
                     extraction = null
-                    mutableState.update { it.copy(document = updated, source = fresh, unreadable = fresh == null) }
+                    searchJob?.cancel()
+                    panelJob?.cancel()
+                    mutableState.update {
+                        it.copy(
+                            document = updated,
+                            source = fresh,
+                            unreadable = fresh == null,
+                            searchMatches = emptyList(),
+                            searchIndex = 0,
+                            searching = false,
+                            hasTextLayer = null,
+                            bookmarks = emptyList(),
+                            notes = emptyList(),
+                        )
+                    }
                     old?.release()
-                    loadPanel()
+                    if (fresh != null) loadPanel()
                     container.messenger.post(done)
                 } catch (error: CancellationException) {
                     target.delete()

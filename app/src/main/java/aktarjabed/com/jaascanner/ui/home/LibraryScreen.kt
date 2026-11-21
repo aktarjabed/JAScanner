@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,8 +44,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +78,7 @@ fun LibraryContent(
     var deleteFolderDialog by remember { mutableStateOf(false) }
     var subfolderDialog by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
+    var inputNonce by rememberSaveable { mutableIntStateOf(0) }
     val selecting = state.selection.isNotEmpty()
     val activeFolder = (state.filter as? LibraryFilter.Folder)?.let { current -> state.folders.firstOrNull { it.id == current.id } }
 
@@ -126,7 +130,10 @@ fun LibraryContent(
                 )
             }
             item {
-                AssistChip(onClick = { newFolderDialog = true }, label = { Text("+ Folder") })
+                AssistChip(
+                    onClick = { inputNonce++; newFolderDialog = true },
+                    label = { Text("+ Folder") },
+                )
             }
         }
 
@@ -142,8 +149,8 @@ fun LibraryContent(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(onClick = { subfolderDialog = true }) { Text("+ Subfolder") }
-                TextButton(onClick = { renameFolderDialog = true }) { Text("Rename") }
+                TextButton(onClick = { inputNonce++; subfolderDialog = true }) { Text("+ Subfolder") }
+                TextButton(onClick = { inputNonce++; renameFolderDialog = true }) { Text("Rename") }
                 TextButton(onClick = { deleteFolderDialog = true }) { Text("Delete folder") }
             }
         }
@@ -177,8 +184,36 @@ fun LibraryContent(
             }
         }
 
+        if (state.loaded && state.loadFailed == null && state.searchFailed != null && state.documents.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Text search failed: ${state.searchFailed}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = vm::retrySearch) { Text("Retry") }
+            }
+        }
+
         when {
-            !state.loaded -> Box(Modifier.fillMaxSize())
+            !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            state.loadFailed != null -> ErrorPanel(
+                message = "Could not load the library: ${state.loadFailed}",
+                onRetry = vm::retryLoad,
+            )
+            state.documents.isEmpty() && state.searchFailed != null -> ErrorPanel(
+                message = "Text search failed: ${state.searchFailed}",
+                onRetry = vm::retrySearch,
+            )
+            state.documents.isEmpty() && state.searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
             state.documents.isEmpty() -> EmptyLibrary(
                 searching = state.query.isNotBlank() || state.filter != LibraryFilter.All,
                 hasAny = state.totalCount > 0,
@@ -224,6 +259,7 @@ fun LibraryContent(
             label = "Folder name",
             initial = "",
             confirmLabel = "Create",
+            dialogKey = Pair("newFolder", inputNonce),
             onConfirm = {
                 vm.createFolder(it)
                 newFolderDialog = false
@@ -237,6 +273,7 @@ fun LibraryContent(
             label = "Subfolder name",
             initial = "",
             confirmLabel = "Create",
+            dialogKey = Pair("subfolder-${activeFolder.id}", inputNonce),
             onConfirm = {
                 vm.createFolder(it, parentId = activeFolder.id)
                 subfolderDialog = false
@@ -250,6 +287,7 @@ fun LibraryContent(
             label = "Folder name",
             initial = activeFolder.name,
             confirmLabel = "Rename",
+            dialogKey = Pair("renameFolder-${activeFolder.id}", inputNonce),
             onConfirm = {
                 vm.renameFolder(activeFolder.id, it)
                 renameFolderDialog = false
@@ -260,7 +298,7 @@ fun LibraryContent(
     if (deleteFolderDialog && activeFolder != null) {
         ConfirmDialog(
             title = "Delete folder?",
-            message = "Documents in \"${activeFolder.name}\" are kept and move back to All.",
+            message = "Documents directly in \"${activeFolder.name}\" move to All. Subfolders keep their documents and become top-level folders.",
             confirmLabel = "Delete folder",
             onConfirm = {
                 vm.deleteFolder(activeFolder.id)
@@ -268,6 +306,18 @@ fun LibraryContent(
             },
             onDismiss = { deleteFolderDialog = false },
         )
+    }
+}
+
+@Composable
+private fun ErrorPanel(message: String, onRetry: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onRetry) { Text("Retry") }
     }
 }
 

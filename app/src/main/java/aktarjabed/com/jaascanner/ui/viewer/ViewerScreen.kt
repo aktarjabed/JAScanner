@@ -105,9 +105,11 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var gotoDialog by remember { mutableStateOf(false) }
+    var gotoError by remember { mutableStateOf<String?>(null) }
     var renameDialog by remember { mutableStateOf(false) }
     var deleteDialog by remember { mutableStateOf(false) }
     var marksDialog by remember { mutableStateOf(false) }
+    var inputNonce by rememberSaveable { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
 
     val shareNow: () -> Unit = {
@@ -189,6 +191,8 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
                                     }
                                     MenuItem("Go to page") {
                                         menu = false
+                                        inputNonce++
+                                        gotoError = null
                                         gotoDialog = true
                                     }
                                     MenuItem(if (night) "Night mode: on" else "Night mode: off") {
@@ -199,14 +203,14 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
                                         menu = false
                                         app.push(Screen.Tool(ToolKind.ExportImages, listOf(documentId)))
                                     }
-                                }
-                                MenuItem("Fill in form") {
-                                    menu = false
-                                    app.push(Screen.Form(documentId))
-                                }
-                                MenuItem("Add password") {
-                                    menu = false
-                                    app.push(Screen.Tool(ToolKind.Protect, listOf(documentId)))
+                                    MenuItem("Fill in form") {
+                                        menu = false
+                                        app.push(Screen.Form(documentId))
+                                    }
+                                    MenuItem("Add password") {
+                                        menu = false
+                                        app.push(Screen.Tool(ToolKind.Protect, listOf(documentId)))
+                                    }
                                 }
                                 MenuItem(if (document.favorite) "Remove from favorites" else "Add to favorites") {
                                     menu = false
@@ -214,6 +218,7 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
                                 }
                                 MenuItem("Rename") {
                                     menu = false
+                                    inputNonce++
                                     renameDialog = true
                                 }
                                 MenuItem("Delete") {
@@ -356,14 +361,17 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
             label = "Page number (1-${source.pageCount})",
             initial = "",
             confirmLabel = "Go",
+            dialogKey = Pair(documentId, inputNonce),
+            error = gotoError,
+            onTextChanged = { gotoError = null },
             onConfirm = { text ->
                 val page = text.toIntOrNull()
                 if (page != null && page in 1..source.pageCount) {
                     scope.launch { listState.scrollToItem(page - 1) }
+                    gotoDialog = false
                 } else {
-                    container.messenger.post("Enter a page from 1 to ${source.pageCount}.")
+                    gotoError = "Enter a page from 1 to ${source.pageCount}."
                 }
-                gotoDialog = false
             },
             onDismiss = { gotoDialog = false },
         )
@@ -374,6 +382,7 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
             label = "Name",
             initial = document.name,
             confirmLabel = "Rename",
+            dialogKey = Pair(documentId, inputNonce),
             onConfirm = {
                 vm.rename(it)
                 renameDialog = false
@@ -414,7 +423,8 @@ private fun MarksDialog(
     onDismiss: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    var title by rememberSaveable { mutableStateOf("") }
+    // Do not restore half-typed bookmark text from a previous opening of this dialog.
+    var title by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Bookmarks and comments") },

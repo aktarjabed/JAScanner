@@ -47,10 +47,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +94,8 @@ fun PagesScreen(app: AppViewModel, documentId: Long, screenId: Long) {
     val scope = rememberCoroutineScope()
     var discardDialog by remember { mutableStateOf(false) }
     var moveDialog by remember { mutableStateOf(false) }
+    var moveError by remember { mutableStateOf<String?>(null) }
+    var moveNonce by rememberSaveable { mutableIntStateOf(0) }
     var draggingId by remember { mutableStateOf<Int?>(null) }
 
     val leave: () -> Unit = { if (state.changed) discardDialog = true else app.pop() }
@@ -140,7 +144,11 @@ fun PagesScreen(app: AppViewModel, documentId: Long, screenId: Long) {
             BottomAppBar(contentPadding = PaddingValues(horizontal = 4.dp)) {
                 BarAction(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Earlier", hasSelection) { vm.shift(-1) }
                 BarAction(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Later", hasSelection) { vm.shift(1) }
-                BarAction(Icons.AutoMirrored.Filled.ArrowForward, "Move to", hasSelection) { moveDialog = true }
+                BarAction(Icons.AutoMirrored.Filled.ArrowForward, "Move to", hasSelection) {
+                    moveError = null
+                    moveNonce++
+                    moveDialog = true
+                }
                 BarAction(Icons.Filled.Refresh, "Rotate", hasSelection) { vm.rotateSelected(90) }
                 BarAction(Icons.Filled.Add, "Copy", hasSelection) { vm.duplicateSelected() }
                 BarAction(Icons.Filled.Delete, "Delete", hasSelection) { vm.deleteSelected() }
@@ -226,10 +234,17 @@ fun PagesScreen(app: AppViewModel, documentId: Long, screenId: Long) {
             label = "Position (1-${state.entries.size})",
             initial = "",
             confirmLabel = "Move",
+            dialogKey = Pair(documentId, moveNonce),
+            error = moveError,
+            onTextChanged = { moveError = null },
             onConfirm = { text ->
                 val position = text.toIntOrNull()
-                if (position != null && position in 1..state.entries.size) vm.moveSelectedTo(position)
-                moveDialog = false
+                if (position != null && position in 1..state.entries.size) {
+                    vm.moveSelectedTo(position)
+                    moveDialog = false
+                } else {
+                    moveError = "Enter a position from 1 to ${state.entries.size}."
+                }
             },
             onDismiss = { moveDialog = false },
         )

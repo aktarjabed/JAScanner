@@ -164,34 +164,121 @@ class ToolViewModel(
 
     fun setName(value: String) = mutableState.update { it.copy(name = value) }
 
-    fun canRun(s: ToolUiState): Boolean = !s.running && when (kind) {
-        ToolKind.Merge -> s.selected.size >= 2
-        ToolKind.ImagesToPdf -> s.images.isNotEmpty()
-        ToolKind.Protect -> s.selected.size == 1 && s.password.length >= 4
-        ToolKind.Unlock -> s.selected.size == 1 && s.password.isNotEmpty()
-        ToolKind.Watermark -> s.selected.size == 1 && when (s.watermarkMode) {
-            WatermarkMode.Text -> s.watermarkText.isNotBlank()
-            WatermarkMode.Picture -> s.watermarkImage != null
+    private fun pageCountOf(s: ToolUiState): Int =
+        s.documents.firstOrNull { it.id == s.selected.firstOrNull() }?.pageCount ?: 0
+
+    private fun pageCountOfDocument(s: ToolUiState, id: Long?): Int =
+        s.documents.firstOrNull { it.id == id }?.pageCount ?: 0
+
+    /** Inline error for a page-list field. Blank is valid only when it means "all pages". */
+    fun pageError(
+        s: ToolUiState,
+        text: String = s.pageText,
+        allowBlank: Boolean,
+        pageCount: Int = pageCountOf(s),
+    ): String? {
+        if (text.isBlank()) return if (allowBlank) null else "Enter at least one page."
+        if (pageCount <= 0) return null // the tool itself reports a locked/unreadable document
+        return when (val parsed = PageSelection.parse(text, pageCount)) {
+            is PageSelectionResult.Ok -> null
+            is PageSelectionResult.Error -> parsed.message
         }
-        ToolKind.Split -> s.selected.size == 1 &&
-            if (s.splitByRanges) s.rangesText.isNotBlank() else (s.perFile.toIntOrNull() ?: 0) >= 1
-        ToolKind.Reorder -> s.selected.size == 1 && s.orderText.isNotBlank()
-        ToolKind.InsertBlank -> s.selected.size == 1 && (s.blankCount.toIntOrNull() ?: 0) >= 1
-        ToolKind.InsertFromPdf -> s.selected.size == 1 && s.insertSource != null
-        else -> s.selected.size == 1
     }
+
+    /** "Pages to insert" belongs to the source PDF, not to the document being edited. */
+    fun insertPageError(s: ToolUiState): String? = pageError(
+        s,
+        allowBlank = true,
+        pageCount = pageCountOfDocument(s, s.insertSource),
+    )
+
+    fun rangesError(s: ToolUiState): String? {
+        if (s.rangesText.isBlank()) return "Enter at least one page range."
+        val count = pageCountOf(s)
+        if (count <= 0) return null
+        return when (val parsed = PageGroups.parse(s.rangesText, count)) {
+            is PageGroupsResult.Ok -> null
+            is PageGroupsResult.Error -> parsed.message
+        }
+    }
+
+    fun orderError(s: ToolUiState): String? {
+        if (s.orderText.isBlank()) return "Enter the new page order."
+        val count = pageCountOf(s)
+        if (count <= 0) return null
+        return when (val parsed = PageOrder.parse(s.orderText, count)) {
+            is PageSelectionResult.Ok -> null
+            is PageSelectionResult.Error -> parsed.message
+        }
+    }
+
+    fun perFileError(s: ToolUiState): String? =
+        if ((s.perFile.toIntOrNull() ?: 0) >= 1) null else "Enter 1 or more pages per file."
+
+    fun blankCountError(s: ToolUiState): String? =
+        if ((s.blankCount.toIntOrNull() ?: 0) >= 1) null else "Enter 1 or more blank pages."
+
+    fun insertAfterError(s: ToolUiState): String? {
+        val page = s.insertAfter.toIntOrNull() ?: return "Enter a page number (0 means at the start)."
+        val count = pageCountOf(s)
+        return if (count <= 0 || page in 0..count) null else "Page $page does not exist. This document has $count pages."
+    }
+
+    fun passwordError(s: ToolUiState): String? = when (kind) {
+        ToolKind.Protect -> if (s.password.length >= 4) null else "Use at least 4 characters."
+        ToolKind.Unlock -> if (s.password.isNotEmpty()) null else "Enter the current password."
+        else -> null
+    }
+
+    fun watermarkError(s: ToolUiState): String? = when (s.watermarkMode) {
+        WatermarkMode.Text -> if (s.watermarkText.isNotBlank()) null else "Enter the watermark text."
+        WatermarkMode.Picture -> if (s.watermarkImage != null) null else "Choose a picture for the watermark."
+    }
+
+    /** First reason why this tool cannot run, or null when all inputs are valid. */
+    fun validationMessage(s: ToolUiState): String? {
+        if (s.running) return null
+        if (kind == ToolKind.ImagesToPdf) {
+            if (s.images.isEmpty()) return "Pick at least one picture."
+        } else if (kind == ToolKind.Merge) {
+            if (s.selected.size < 2) return "Choose at least two documents."
+        } else if (s.selected.size != 1) {
+            return "Choose a document first."
+        }
+        return when (kind) {
+            ToolKind.Extract, ToolKind.DeletePages -> pageError(s, allowBlank = false)
+            ToolKind.ExportImages, ToolKind.Rotate, ToolKind.Crop -> pageError(s, allowBlank = true)
+            ToolKind.InsertFromPdf -> insertPageError(s)
+                ?: insertAfterError(s)
+                ?: if (s.insertSource == null) "Choose the document to take pages from." else null
+            ToolKind.Split -> if (s.splitByRanges) rangesError(s) else perFileError(s)
+            ToolKind.Reorder -> orderError(s)
+            ToolKind.InsertBlank -> blankCountError(s) ?: insertAfterError(s)
+            ToolKind.Protect, ToolKind.Unlock -> passwordError(s)
+            ToolKind.Watermark -> watermarkError(s)
+            else -> null
+        }
+    }
+
+    fun canRun(s: ToolUiState): Boolean = !s.running && validationMessage(s) == null
 
     /** Runs in the app scope so the result is saved even if the user leaves this screen. */
     fun run(context: Context) {
         val snapshot = mutableState.value
-        if (!canRun(snapshot)) return
+        val reason = validationMessage(snapshot)
+        if (reason != null) {
+            mutableState.update { it.copy(message = reason) }
+            return
+        }
         mutableState.update {
             it.copy(running = true, message = null, results = emptyList(), exported = emptyList(), progress = null)
         }
         val appContext = context.applicationContext
+        val outputs = mutableListOf<File>()
+        val registered = mutableSetOf<String>()
         container.appScope.launch {
             try {
-                val outcome = execute(appContext, snapshot)
+                val outcome = execute(appContext, snapshot, outputs, registered)
                 mutableState.update {
                     it.copy(
                         running = false,
@@ -203,6 +290,10 @@ class ToolViewModel(
                 }
             } catch (error: Throwable) {
                 mutableState.update { it.copy(running = false, progress = null, message = error.toUserMessage()) }
+            } finally {
+                // A tool that fails between newOutputFile() and registerOutput() used to leave a
+                // zero-byte PDF forever. Files that did get a database row are kept.
+                outputs.filterNot { it.name in registered }.forEach { it.delete() }
             }
         }
     }
@@ -224,17 +315,29 @@ class ToolViewModel(
         }
     }
 
-    private suspend fun execute(context: Context, s: ToolUiState): ToolOutcome {
+    private suspend fun execute(
+        context: Context,
+        s: ToolUiState,
+        outputs: MutableList<File>,
+        registered: MutableSet<String>,
+    ): ToolOutcome {
         val repo = container.documents
         val settings = container.settings.settings.first()
 
+        fun newOutput(): File = repo.newOutputFile().also { outputs.add(it) }
+
+        suspend fun saveOutput(target: File, name: String, folderId: Long? = null): DocumentEntity {
+            val saved = repo.registerOutput(target, name, DocumentEntity.SOURCE_TOOL, folderId)
+            registered.add(target.name)
+            return saved
+        }
+
         if (kind == ToolKind.ImagesToPdf) {
-            val target = repo.newOutputFile()
+            val target = newOutput()
             PdfTools.imagesToPdf(context, s.images, s.pageSize, target, s.imageFilter) { done, total -> setProgress(done, total) }
-            val saved = repo.registerOutput(
+            val saved = saveOutput(
                 target,
                 nameOr(s, "Images " + Formatters.defaultScanName(System.currentTimeMillis()).removePrefix("Scan ")),
-                DocumentEntity.SOURCE_TOOL,
             )
             if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
             return ToolOutcome(listOf(saved), message = "Created a PDF with ${saved.pageCount} pages.")
@@ -246,12 +349,12 @@ class ToolViewModel(
         val file = repo.fileOf(document)
 
         suspend fun register(target: File, name: String): DocumentEntity =
-            repo.registerOutput(target, name, DocumentEntity.SOURCE_TOOL, document.folderId)
+            saveOutput(target, name, document.folderId)
 
         return when (kind) {
             ToolKind.Merge -> {
                 if (chosen.size < 2) throw PdfToolException("Choose at least two documents.")
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.merge(chosen.map { repo.fileOf(it) }, target)
                 val saved = register(target, nameOr(s, "Merged " + chosen.first().name))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -259,7 +362,7 @@ class ToolViewModel(
             }
             ToolKind.Extract -> {
                 val pages = pagesOf(s.pageText, document, blankMeansAll = false)
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.extractPages(file, pages, target)
                 val saved = register(target, nameOr(s, "${document.name} (pages ${s.pageText.trim()})"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -267,7 +370,7 @@ class ToolViewModel(
             }
             ToolKind.DeletePages -> {
                 val pages = pagesOf(s.pageText, document, blankMeansAll = false)
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.deletePages(file, pages, target)
                 val saved = register(target, nameOr(s, "${document.name} (trimmed)"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -275,7 +378,7 @@ class ToolViewModel(
             }
             ToolKind.Rotate -> {
                 val pages = pagesOf(s.pageText, document, blankMeansAll = true)
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.rotatePages(file, pages, s.degrees, target)
                 val saved = register(target, nameOr(s, "${document.name} (rotated)"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -288,9 +391,9 @@ class ToolViewModel(
                         is PageGroupsResult.Ok -> parsed.groups
                         is PageGroupsResult.Error -> throw PdfToolException(parsed.message)
                     }
-                    PdfTools.splitRanges(file, groups) { repo.newOutputFile() }
+                    PdfTools.splitRanges(file, groups) { newOutput() }
                 } else {
-                    PdfTools.splitEvery(file, s.perFile.toIntOrNull() ?: 0) { repo.newOutputFile() }
+                    PdfTools.splitEvery(file, s.perFile.toIntOrNull() ?: 0) { newOutput() }
                 }
                 val base = nameOr(s, document.name)
                 val saved = files.mapIndexed { index, part -> register(part, "$base - part ${index + 1}") }
@@ -303,7 +406,7 @@ class ToolViewModel(
                     is PageSelectionResult.Ok -> parsed.pages
                     is PageSelectionResult.Error -> throw PdfToolException(parsed.message)
                 }
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.reorderPages(file, order, target)
                 val saved = register(target, nameOr(s, "${document.name} (reordered)"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -313,7 +416,7 @@ class ToolViewModel(
                 if (document.pageCount == 0) throw PdfToolException("This PDF cannot be read.")
                 val after = s.insertAfter.toIntOrNull() ?: 0
                 val count = s.blankCount.toIntOrNull() ?: 1
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.insertBlankPages(file, after, count, s.pageSize, target)
                 val saved = register(target, nameOr(s, "${document.name} (with blank pages)"))
                 ToolOutcome(listOf(saved), message = "Inserted $count blank page(s). ${saved.pageCount} pages now.")
@@ -324,7 +427,7 @@ class ToolViewModel(
                     ?: throw PdfToolException("That document no longer exists.")
                 val pages = pagesOf(s.pageText, other, blankMeansAll = true)
                 val after = s.insertAfter.toIntOrNull() ?: 0
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.insertFromPdf(file, repo.fileOf(other), pages, after, target)
                 val saved = register(target, nameOr(s, "${document.name} (with pages from ${other.name})"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -332,14 +435,14 @@ class ToolViewModel(
             }
             ToolKind.Crop -> {
                 val pages = pagesOf(s.pageText, document, blankMeansAll = true)
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.cropPages(file, pages, s.cropPercent, target)
                 val saved = register(target, nameOr(s, "${document.name} (trimmed)"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
                 ToolOutcome(listOf(saved), message = "Trimmed ${s.cropPercent}% from the edges of ${pages.size} pages.")
             }
             ToolKind.Compress -> {
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 when (s.compressMode) {
                     CompressMode.KeepText -> {
                         val outcome = PdfImageCompress.compress(
@@ -386,7 +489,7 @@ class ToolViewModel(
                 }
             }
             ToolKind.Protect -> {
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.protect(file, s.password, target)
                 val saved = register(target, nameOr(s, "${document.name} (protected)"))
                 ToolOutcome(
@@ -395,7 +498,7 @@ class ToolViewModel(
                 )
             }
             ToolKind.Unlock -> {
-                val target = repo.newOutputFile()
+                val target = newOutput()
                 PdfTools.unlock(file, s.password, target)
                 val saved = register(target, nameOr(s, "${document.name} (unlocked)"))
                 if (settings.autoOcr) container.ocrIndexer.indexInBackground(saved.id)
@@ -403,7 +506,7 @@ class ToolViewModel(
             }
             ToolKind.Watermark -> {
                 if (document.pageCount == 0) throw PdfToolException("This PDF cannot be read.")
-                val target = repo.newOutputFile()
+                // Decode the stamp first: a bad picture must not leave an empty output PDF behind.
                 val stamp = when (s.watermarkMode) {
                     WatermarkMode.Text -> TextBitmaps.render(s.watermarkText.trim(), WATERMARK_COLOR, textSizePx = 160f, bold = true)
                     WatermarkMode.Picture -> {
@@ -411,6 +514,7 @@ class ToolViewModel(
                         ImageDecoding.decode(context, uri, maxSide = 1200)
                     }
                 }
+                val target = newOutput()
                 try {
                     val widthFraction = when {
                         s.watermarkTiled -> 0.28f

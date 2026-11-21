@@ -77,8 +77,8 @@ fun FormScreen(app: AppViewModel, documentId: Long) {
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
             item {
                 Text(
-                    "Fill in the boxes below and save a copy. Text boxes and check boxes are supported; " +
-                        "other field types are shown but cannot be changed yet.",
+                    "Fill in the fields below and save a copy. Text boxes, check boxes, radio buttons and " +
+                        "choice lists can be filled in; other field types are shown but cannot be changed yet.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),

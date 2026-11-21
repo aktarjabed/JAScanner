@@ -78,6 +78,7 @@ fun HomeScreen(app: AppViewModel) {
     var moveDialog by remember { mutableStateOf(false) }
     var newFolderForMove by remember { mutableStateOf(false) }
     var overflow by remember { mutableStateOf(false) }
+    var inputNonce by rememberSaveable { mutableIntStateOf(0) }
     var scanMenu by remember { mutableStateOf(false) }
     // Saved so the guard survives an activity recreation while the scanner is open.
     var scanStarting by rememberSaveable { mutableStateOf(false) }
@@ -175,6 +176,7 @@ fun HomeScreen(app: AppViewModel) {
                                         text = { Text("Rename") },
                                         onClick = {
                                             overflow = false
+                                            inputNonce++
                                             renameTarget = selectedDocs.first().id
                                         },
                                     )
@@ -328,6 +330,7 @@ fun HomeScreen(app: AppViewModel) {
                 label = "Name",
                 initial = doc.name,
                 confirmLabel = "Rename",
+                dialogKey = Pair(id, inputNonce),
                 onConfirm = {
                     vm.rename(id, it)
                     vm.clearSelection()
@@ -360,6 +363,7 @@ fun HomeScreen(app: AppViewModel) {
             },
             onNewFolder = {
                 moveDialog = false
+                inputNonce++
                 newFolderForMove = true
             },
             onDismiss = { moveDialog = false },
@@ -371,6 +375,7 @@ fun HomeScreen(app: AppViewModel) {
             label = "Folder name",
             initial = "",
             confirmLabel = "Create and move",
+            dialogKey = Pair("newFolderForMove", inputNonce),
             onConfirm = {
                 vm.createFolder(it, thenMove = selectedIds)
                 newFolderForMove = false

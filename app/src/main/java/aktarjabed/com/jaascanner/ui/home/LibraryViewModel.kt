@@ -12,16 +12,19 @@ import aktarjabed.com.jaascanner.data.db.DocumentEntity
 import aktarjabed.com.jaascanner.data.db.DocumentSummary
 import aktarjabed.com.jaascanner.data.db.FolderEntity
 import aktarjabed.com.jaascanner.scan.ScanResult
+import aktarjabed.com.jaascanner.pdf.toUserMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,76 +49,133 @@ data class LibraryUiState(
     val selection: Set<Long> = emptySet(),
     val totalCount: Int = 0,
     val loaded: Boolean = false,
+    val searching: Boolean = false,
+    val searchFailed: String? = null,
+    val loadFailed: String? = null,
 )
 
-@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+private sealed interface LibrarySource {
+    data class Ready(
+        val documents: List<DocumentSummary>,
+        val folders: List<FolderEntity>,
+        val settings: AppSettings,
+    ) : LibrarySource
+
+    data class Failed(val message: String) : LibrarySource
+}
+
+private sealed interface TextMatches {
+    data object Idle : TextMatches
+    data object Loading : TextMatches
+    data class Found(val ids: Set<Long>) : TextMatches
+    data class Failed(val message: String) : TextMatches
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     private val documents = container.documents
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow<LibraryFilter>(LibraryFilter.All)
     private val selection = MutableStateFlow<Set<Long>>(emptySet())
+    private val searchRetry = MutableStateFlow(0)
+    private val sourceRetry = MutableStateFlow(0)
 
-    /** Ids of documents whose recognised text contains the query; null when not searching.
-     *  A failed lookup (e.g. malformed stored OCR text) must not propagate: left unguarded, an
-     *  exception here used to permanently kill the `state` StateFlow below, freezing the whole
-     *  Library screen (not just search) until the screen was left and reopened. */
-    private val textMatches = query
-        .debounce(250)
-        .mapLatest { text ->
+    /**
+     * Ids of documents whose recognised text contains the query. A failed lookup is exposed as
+     * [TextMatches.Failed] instead of an empty result: pretending "nothing matches" hid real
+     * database errors, and letting the exception escape killed the whole Library StateFlow.
+     */
+    private val textMatches = combine(query, searchRetry) { text, _ -> text }
+        .flatMapLatest { text ->
             if (text.isBlank()) {
-                null
+                flowOf(TextMatches.Idle)
             } else {
-                try {
-                    documents.idsMatchingText(text.trim()).toSet()
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    emptySet()
+                flow {
+                    emit(TextMatches.Loading)
+                    delay(250)
+                    emit(TextMatches.Found(documents.idsMatchingText(text.trim()).toSet()))
+                }.catch { error ->
+                    if (error is CancellationException) throw error
+                    emit(TextMatches.Failed(error.toUserMessage()))
                 }
             }
         }
 
-    private val source = combine(documents.summaries, documents.folders, container.settings.settings) { docs, folders, settings ->
-        Triple(docs, folders, settings)
+    /** Re-subscribing on retry lets a failed database flow recover without leaving the screen. */
+    private val source = sourceRetry.flatMapLatest {
+        combine(documents.summaries, documents.folders, container.settings.settings) { docs, folders, settings ->
+            LibrarySource.Ready(docs, folders, settings) as LibrarySource
+        }.catch { error ->
+            if (error is CancellationException) throw error
+            emit(LibrarySource.Failed(error.toUserMessage()))
+        }
     }
 
     private val view = combine(query, filter, textMatches) { text, current, matches ->
         Triple(text, current, matches)
     }
 
-    val state: StateFlow<LibraryUiState> = combine(source, view, selection) { (docs, folders, settings), (text, current, matches), selected ->
-        val needle = text.trim()
-        val visible = docs
-            .filter { doc ->
-                when (current) {
-                    LibraryFilter.All -> true
-                    LibraryFilter.Favorites -> doc.favorite
-                    is LibraryFilter.Folder -> doc.folderId != null && doc.folderId in inFolder(folders, current.id)
+    val state: StateFlow<LibraryUiState> = combine(source, view, selection) { source, (text, current, matchState), selected ->
+        if (source is LibrarySource.Failed) {
+            LibraryUiState(
+                query = text,
+                filter = current,
+                loaded = true,
+                loadFailed = source.message,
+                searchFailed = (matchState as? TextMatches.Failed)?.message,
+                searching = matchState is TextMatches.Loading,
+            )
+        } else {
+            val ready = source as LibrarySource.Ready
+            val docs = ready.documents
+            val folders = ready.folders
+            val matches = (matchState as? TextMatches.Found)?.ids
+            val needle = text.trim()
+            val visible = docs
+                .filter { doc ->
+                    when (current) {
+                        LibraryFilter.All -> true
+                        LibraryFilter.Favorites -> doc.favorite
+                        is LibraryFilter.Folder -> doc.folderId != null && doc.folderId in inFolder(folders, current.id)
+                    }
                 }
-            }
-            .filter { doc ->
-                needle.isEmpty() || doc.name.contains(needle, ignoreCase = true) || matches?.contains(doc.id) == true
-            }
-        val sorted = when (settings.sortOrder) {
-            SortOrder.Newest -> visible
-            SortOrder.Name -> visible.sortedBy { it.name.lowercase() }
-            SortOrder.Size -> visible.sortedByDescending { it.sizeBytes }
-        }.sortedBy { !it.pinned } // pinned documents stay on top; the sort above is kept within each group
-        LibraryUiState(
-            documents = sorted,
-            folders = folders,
-            settings = settings,
-            query = text,
-            filter = current,
-            selection = selected.intersect(docs.map { it.id }.toSet()),
-            totalCount = docs.size,
-            loaded = true,
-        )
+                .filter { doc ->
+                    needle.isEmpty() || doc.name.contains(needle, ignoreCase = true) || matches?.contains(doc.id) == true
+                }
+            val sorted = when (ready.settings.sortOrder) {
+                SortOrder.Newest -> visible
+                SortOrder.Name -> visible.sortedBy { it.name.lowercase() }
+                SortOrder.Size -> visible.sortedByDescending { it.sizeBytes }
+            }.sortedBy { !it.pinned } // pinned documents stay on top; the sort above is kept within each group
+            LibraryUiState(
+                documents = sorted,
+                folders = folders,
+                settings = ready.settings,
+                query = text,
+                filter = current,
+                selection = selected.intersect(docs.map { it.id }.toSet()),
+                totalCount = docs.size,
+                loaded = true,
+                searching = matchState is TextMatches.Loading,
+                searchFailed = (matchState as? TextMatches.Failed)?.message,
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    fun retrySearch() {
+        searchRetry.update { it + 1 }
+    }
+
+    fun retryLoad() {
+        sourceRetry.update { it + 1 }
+    }
 
     fun setQuery(text: String) {
         query.value = text
+        // A query change rebuilds the visible list, so any old selection would be invisible and
+        // Back would clear a selection the user could no longer see.
+        selection.value = emptySet()
     }
 
     fun setFilter(value: LibraryFilter) {
