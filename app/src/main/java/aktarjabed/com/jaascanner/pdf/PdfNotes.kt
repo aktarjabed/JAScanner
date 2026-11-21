@@ -96,12 +96,7 @@ object PdfNotes {
         withContext(Dispatchers.IO) {
             try {
                 PDDocument.load(source).use { document ->
-                    if (page !in 0 until document.numberOfPages) throw PdfToolException("That page no longer exists.")
-                    val pdPage = document.getPage(page)
-                    val list = pdPage.annotations
-                    if (index !in list.indices) throw PdfToolException("That comment no longer exists.")
-                    list.removeAt(index)
-                    pdPage.annotations = list
+                    removeAt(document, page, index)
                     document.save(target)
                 }
             } catch (error: Throwable) {
@@ -109,5 +104,38 @@ object PdfNotes {
                 throw error
             }
         }
+    }
+
+    /**
+     * Removes [note] by finding it in the document as it is now. Matching by content instead of
+     * the remembered annotation index keeps a second quick removal from deleting a different
+     * comment after the first one shifted the indices.
+     */
+    suspend fun remove(source: File, target: File, note: NoteInfo) {
+        withContext(Dispatchers.IO) {
+            try {
+                PDDocument.load(source).use { document ->
+                    val current = read(document)
+                    val match = current.firstOrNull {
+                        it.page == note.page && it.kind == note.kind &&
+                            it.text == note.text && it.author == note.author
+                    } ?: throw PdfToolException("That comment no longer exists.")
+                    removeAt(document, match.page, match.index)
+                    document.save(target)
+                }
+            } catch (error: Throwable) {
+                target.delete()
+                throw error
+            }
+        }
+    }
+
+    private fun removeAt(document: PDDocument, page: Int, index: Int) {
+        if (page !in 0 until document.numberOfPages) throw PdfToolException("That page no longer exists.")
+        val pdPage = document.getPage(page)
+        val list = pdPage.annotations
+        if (index !in list.indices) throw PdfToolException("That comment no longer exists.")
+        list.removeAt(index)
+        pdPage.annotations = list
     }
 }

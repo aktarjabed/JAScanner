@@ -68,7 +68,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CardScanScreen(app: AppViewModel) {
+fun CardScanScreen(app: AppViewModel, screenId: Long) {
     val context = LocalContext.current
     val container = context.container
     val scope = rememberCoroutineScope()
@@ -170,7 +170,7 @@ fun CardScanScreen(app: AppViewModel) {
                 }
                 item {
                     Button(
-                        onClick = { vm.save(context) { id -> app.replaceTop(Screen.Viewer(id)) } },
+                        onClick = { vm.save(context) { id -> app.replaceTopIfCurrent(screenId, Screen.Viewer(id)) } },
                         enabled = !state.saving && state.sides.any { it.photo != null },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Save as PDF") }

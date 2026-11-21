@@ -338,6 +338,7 @@ fun ViewerScreen(app: AppViewModel, documentId: Long) {
             bookmarks = state.bookmarks,
             notes = state.notes,
             loading = state.panelLoading,
+            busy = state.panelBusy,
             currentPage = listState.firstVisibleItemIndex,
             onJump = { page ->
                 marksDialog = false
@@ -404,10 +405,11 @@ private fun MarksDialog(
     bookmarks: List<Bookmark>,
     notes: List<NoteInfo>,
     loading: Boolean,
+    busy: Boolean,
     currentPage: Int,
     onJump: (Int) -> Unit,
     onAddBookmark: (String) -> Unit,
-    onRemoveBookmark: (Int) -> Unit,
+    onRemoveBookmark: (Bookmark) -> Unit,
     onRemoveNote: (NoteInfo) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -431,10 +433,13 @@ private fun MarksDialog(
                             placeholder = { Text("Page ${currentPage + 1}") },
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(onClick = {
-                            onAddBookmark(title)
-                            title = ""
-                        }) { Text("Add") }
+                        TextButton(
+                            onClick = {
+                                onAddBookmark(title)
+                                title = ""
+                            },
+                            enabled = !busy,
+                        ) { Text("Add") }
                     }
                 }
                 when {
@@ -450,7 +455,7 @@ private fun MarksDialog(
                         modifier = Modifier.padding(top = 12.dp),
                     )
                     tab == 0 -> LazyColumn(Modifier.heightIn(max = 300.dp)) {
-                        itemsIndexed(bookmarks) { index, bookmark ->
+                        itemsIndexed(bookmarks) { _, bookmark ->
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -466,7 +471,7 @@ private fun MarksDialog(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                IconButton(onClick = { onRemoveBookmark(index) }) {
+                                IconButton(onClick = { onRemoveBookmark(bookmark) }, enabled = !busy) {
                                     Icon(Icons.Filled.Delete, contentDescription = "Remove bookmark ${bookmark.title}")
                                 }
                             }
@@ -486,7 +491,7 @@ private fun MarksDialog(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                IconButton(onClick = { onRemoveNote(note) }) {
+                                IconButton(onClick = { onRemoveNote(note) }, enabled = !busy) {
                                     Icon(Icons.Filled.Delete, contentDescription = "Remove comment on page ${note.page + 1}")
                                 }
                             }

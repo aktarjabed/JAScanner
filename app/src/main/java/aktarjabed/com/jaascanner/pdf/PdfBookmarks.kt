@@ -88,25 +88,42 @@ object PdfBookmarks {
 
     /** Removes the bookmark at [index] of the list that [read] returns (its sub-entries move up a level). */
     suspend fun removeAt(source: File, target: File, index: Int) {
+        edit(source, target) { document -> removeAt(document, read(document), index) }
+    }
+
+    /**
+     * Removes [bookmark] by finding it in the document as it is now. Callers hold a bookmark from
+     * an earlier [read]; matching by content instead of position means a second quick removal
+     * cannot delete the wrong entry after the first one shifted the indices.
+     */
+    suspend fun remove(source: File, target: File, bookmark: Bookmark) {
         edit(source, target) { document ->
             val current = read(document)
-            if (index !in current.indices) throw PdfToolException("That bookmark no longer exists.")
-            val removedLevel = current[index].level
-            val kept = ArrayList<Bookmark>(current.size)
-            var inside = true
-            for ((position, bookmark) in current.withIndex()) {
-                when {
-                    position == index -> Unit
-                    position > index && inside && bookmark.level > removedLevel ->
-                        kept.add(bookmark.copy(level = bookmark.level - 1))
-                    else -> {
-                        if (position > index) inside = false
-                        kept.add(bookmark)
-                    }
+            val index = current.indexOfFirst {
+                it.title == bookmark.title && it.page == bookmark.page && it.level == bookmark.level
+            }
+            if (index < 0) throw PdfToolException("That bookmark no longer exists.")
+            removeAt(document, current, index)
+        }
+    }
+
+    private fun removeAt(document: PDDocument, current: List<Bookmark>, index: Int) {
+        if (index !in current.indices) throw PdfToolException("That bookmark no longer exists.")
+        val removedLevel = current[index].level
+        val kept = ArrayList<Bookmark>(current.size)
+        var inside = true
+        for ((position, bookmark) in current.withIndex()) {
+            when {
+                position == index -> Unit
+                position > index && inside && bookmark.level > removedLevel ->
+                    kept.add(bookmark.copy(level = bookmark.level - 1))
+                else -> {
+                    if (position > index) inside = false
+                    kept.add(bookmark)
                 }
             }
-            writeTo(document, kept)
         }
+        writeTo(document, kept)
     }
 
     private suspend fun edit(source: File, target: File, block: (PDDocument) -> Unit) {

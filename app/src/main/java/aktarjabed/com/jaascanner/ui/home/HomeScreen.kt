@@ -79,7 +79,8 @@ fun HomeScreen(app: AppViewModel) {
     var newFolderForMove by remember { mutableStateOf(false) }
     var overflow by remember { mutableStateOf(false) }
     var scanMenu by remember { mutableStateOf(false) }
-    var scanStarting by remember { mutableStateOf(false) }
+    // Saved so the guard survives an activity recreation while the scanner is open.
+    var scanStarting by rememberSaveable { mutableStateOf(false) }
 
     val selectedDocs = state.documents.filter { it.id in state.selection }
     val selectedIds = selectedDocs.map { it.id }
@@ -88,6 +89,8 @@ fun HomeScreen(app: AppViewModel) {
     BackHandler(enabled = tab != 0 && selectedDocs.isEmpty()) { tab = 0 }
 
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        // The scanner has returned (even if the user cancelled), so allow another scan now.
+        scanStarting = false
         if (result.resultCode == Activity.RESULT_OK) {
             val scan = ScannerLauncher.parseResult(result.data)
             if (scan == null) {
@@ -110,12 +113,15 @@ fun HomeScreen(app: AppViewModel) {
                     val settings = container.settings.settings.first()
                     val sender = ScannerLauncher.startIntentSender(activity, settings)
                     scanLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                    // Keep the guard set until the result callback runs. Clearing it here would
+                    // reopen the window a second tap could use while the scanner is still open.
                 } catch (error: CancellationException) {
+                    // The scanner was never launched if the scope died during the settings read.
+                    scanStarting = false
                     throw error
                 } catch (error: Exception) {
-                    container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
-                } finally {
                     scanStarting = false
+                    container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
                 }
             }
         }

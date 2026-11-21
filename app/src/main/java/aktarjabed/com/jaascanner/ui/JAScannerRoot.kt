@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import aktarjabed.com.jaascanner.container
+import kotlinx.coroutines.CancellationException
 import aktarjabed.com.jaascanner.data.AppSettings
 import aktarjabed.com.jaascanner.data.ThemeMode
 import aktarjabed.com.jaascanner.ui.cards.CardScanScreen
@@ -42,7 +43,15 @@ import aktarjabed.com.jaascanner.ui.viewer.ViewerScreen
 fun JAScannerRoot(app: AppViewModel) {
     val container = LocalContext.current.container
     val settings by produceState<AppSettings?>(initialValue = null) {
-        container.settings.settings.collect { value = it }
+        try {
+            container.settings.settings.collect { value = it }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            // Never leave the app on the empty Checking screen: fall back to defaults.
+            value = AppSettings()
+            container.messenger.post("Settings could not be loaded. Defaults are being used.")
+        }
     }
 
     LaunchedEffect(settings?.appLock) {
@@ -83,13 +92,13 @@ private fun Navigation(app: AppViewModel) {
                 when (screen) {
                     Screen.Home -> HomeScreen(app)
                     is Screen.Viewer -> ViewerScreen(app, screen.documentId)
-                    is Screen.Editor -> EditorScreen(app, screen.documentId)
+                    is Screen.Editor -> EditorScreen(app, screen.documentId, screen.id)
                     is Screen.Ocr -> OcrScreen(app, screen.documentId)
                     is Screen.Tool -> ToolScreen(app, screen.kind, screen.preselectedIds)
                     is Screen.Qr -> QrScreen(app)
-                    is Screen.Cards -> CardScanScreen(app)
+                    is Screen.Cards -> CardScanScreen(app, screen.id)
                     is Screen.Form -> FormScreen(app, screen.documentId)
-                    is Screen.Pages -> PagesScreen(app, screen.documentId)
+                    is Screen.Pages -> PagesScreen(app, screen.documentId, screen.id)
                     is Screen.Reader -> ReaderScreen(app, screen.documentId)
                 }
             }

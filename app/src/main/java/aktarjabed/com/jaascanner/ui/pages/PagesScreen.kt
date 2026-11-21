@@ -84,7 +84,7 @@ private const val EDGE_SCROLL_STEP_PX = 36f
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PagesScreen(app: AppViewModel, documentId: Long) {
+fun PagesScreen(app: AppViewModel, documentId: Long, screenId: Long) {
     val vm = containerViewModel { PagesViewModel(it, documentId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val source = state.source
@@ -130,7 +130,7 @@ fun PagesScreen(app: AppViewModel, documentId: Long) {
                         Text(if (allSelected) "None" else "All")
                     }
                     TextButton(
-                        onClick = { vm.save { newId -> app.replaceTop(Screen.Viewer(newId)) } },
+                        onClick = { vm.save { newId -> app.replaceTopIfCurrent(screenId, Screen.Viewer(newId)) } },
                         enabled = state.changed && !state.saving,
                     ) { Text("Save") }
                 },

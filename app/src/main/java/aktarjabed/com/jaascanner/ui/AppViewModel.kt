@@ -59,6 +59,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         push(screen)
     }
 
+    /**
+     * Replaces the top screen with [screen], but only when [originId] is still on top.
+     *
+     * App-scoped save callbacks finish after the user may have left the screen that started the
+     * save. Without this check, [replaceTop] would pop whatever is now on top (the Library or a
+     * different document) and destroy it. When the origin is gone, the saved document is still
+     * registered and announced, so the user can open it from the Library.
+     */
+    fun replaceTopIfCurrent(originId: Long, screen: Screen) {
+        if (stack.lastOrNull()?.id != originId) return
+        replaceTop(screen)
+    }
+
     fun popToHome() {
         while (stack.size > 1) pop()
     }

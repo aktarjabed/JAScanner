@@ -1,5 +1,7 @@
 package aktarjabed.com.jaascanner.ui.lock
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,17 +26,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
-import aktarjabed.com.jaascanner.container
 import aktarjabed.com.jaascanner.core.findActivity
 import aktarjabed.com.jaascanner.security.AppLock
 import aktarjabed.com.jaascanner.ui.AppViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun LockScreen(app: AppViewModel) {
     val context = LocalContext.current
-    val container = context.container
-    val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
     val available = AppLock.isAvailable(context)
 
@@ -66,16 +63,20 @@ fun LockScreen(app: AppViewModel) {
             Button(onClick = prompt) { Text("Unlock") }
         } else {
             Text(
-                "This phone no longer has a screen lock or fingerprint set up, so the app lock cannot ask for one.",
+                "This phone no longer has a screen lock or fingerprint set up, so JAScanner cannot ask you to authenticate. " +
+                    "The app stays locked; set a screen lock in system settings, then come back and unlock.",
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedButton(onClick = {
-                scope.launch {
-                    container.settings.setAppLock(false)
-                    app.unlock()
+                val intent = Intent(Settings.ACTION_SECURITY_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(intent)
+                } catch (error: Exception) {
+                    message = "Open system Settings > Security and set a screen lock."
                 }
-            }) { Text("Turn off app lock") }
+            }) { Text("Open security settings") }
         }
         message?.let {
             Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)

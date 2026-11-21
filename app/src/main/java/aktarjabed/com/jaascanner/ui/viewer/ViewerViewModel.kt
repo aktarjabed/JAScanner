@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class ViewerUiState(
@@ -41,6 +43,7 @@ data class ViewerUiState(
     val bookmarks: List<Bookmark> = emptyList(),
     val notes: List<NoteInfo> = emptyList(),
     val panelLoading: Boolean = false,
+    val panelBusy: Boolean = false,
 )
 
 class ViewerViewModel(
@@ -49,6 +52,7 @@ class ViewerViewModel(
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(ViewerUiState())
+    private val changeMutex = Mutex()
     val state: StateFlow<ViewerUiState> = mutableState.asStateFlow()
 
     private var pageTexts: List<String>? = null
@@ -176,41 +180,49 @@ class ViewerViewModel(
     fun addBookmark(title: String, page: Int) =
         change("Bookmark added.") { source, target -> PdfBookmarks.add(source, target, title, page) }
 
-    fun removeBookmark(index: Int) =
-        change("Bookmark removed.") { source, target -> PdfBookmarks.removeAt(source, target, index) }
+    fun removeBookmark(bookmark: Bookmark) =
+        change("Bookmark removed.") { source, target -> PdfBookmarks.remove(source, target, bookmark) }
 
     fun removeNote(note: NoteInfo) =
-        change("Comment removed.") { source, target -> PdfNotes.remove(source, target, note.page, note.index) }
+        change("Comment removed.") { source, target -> PdfNotes.remove(source, target, note) }
 
     /**
      * Small changes that live inside the PDF (bookmarks, comments) are written into the same
      * document. The new file is checked first; if anything fails the document stays as it was.
      */
     private fun change(done: String, work: suspend (source: File, target: File) -> Unit) {
-        val document = mutableState.value.document ?: return
         container.appScope.launch {
-            val target = container.documents.newOutputFile()
-            try {
-                work(container.documents.fileOf(document), target)
-                val updated = container.documents.replaceContent(document, target)
-                if (updated == null) {
-                    container.messenger.post("That change could not be saved. The document is unchanged.")
-                    return@launch
+            // Bookmarks and comments rewrite the same PDF. Serialise them so two quick taps
+            // cannot both read the old file and overwrite each other, and read the latest
+            // document only once it is this operation's turn.
+            changeMutex.withLock {
+                val document = mutableState.value.document ?: return@withLock
+                mutableState.update { it.copy(panelBusy = true) }
+                val target = container.documents.newOutputFile()
+                try {
+                    work(container.documents.fileOf(document), target)
+                    val updated = container.documents.replaceContent(document, target)
+                    if (updated == null) {
+                        container.messenger.post("That change could not be saved. The document is unchanged.")
+                        return@withLock
+                    }
+                    val fresh = PdfPageSource.open(container.documents.fileOf(updated))
+                    val old = mutableState.value.source
+                    pageTexts = null
+                    extraction = null
+                    mutableState.update { it.copy(document = updated, source = fresh, unreadable = fresh == null) }
+                    old?.release()
+                    loadPanel()
+                    container.messenger.post(done)
+                } catch (error: CancellationException) {
+                    target.delete()
+                    throw error
+                } catch (error: Throwable) {
+                    target.delete()
+                    container.messenger.post(error.toUserMessage())
+                } finally {
+                    mutableState.update { it.copy(panelBusy = false) }
                 }
-                val fresh = PdfPageSource.open(container.documents.fileOf(updated))
-                val old = mutableState.value.source
-                pageTexts = null
-                extraction = null
-                mutableState.update { it.copy(document = updated, source = fresh, unreadable = fresh == null) }
-                old?.release()
-                loadPanel()
-                container.messenger.post(done)
-            } catch (error: CancellationException) {
-                target.delete()
-                throw error
-            } catch (error: Throwable) {
-                target.delete()
-                container.messenger.post(error.toUserMessage())
             }
         }
     }

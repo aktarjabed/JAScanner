@@ -108,7 +108,7 @@ private val TAP_TOOLS = setOf(EditorTool.Signature, EditorTool.Text, EditorTool.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen(app: AppViewModel, documentId: Long) {
+fun EditorScreen(app: AppViewModel, documentId: Long, screenId: Long) {
     val context = LocalContext.current
     val vm = containerViewModel { EditorViewModel(it, documentId) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -142,7 +142,7 @@ fun EditorScreen(app: AppViewModel, documentId: Long) {
                     TextButton(onClick = vm::undo, enabled = state.marks.isNotEmpty()) { Text("Undo") }
                     TextButton(onClick = vm::redo, enabled = state.undone.isNotEmpty()) { Text("Redo") }
                     TextButton(
-                        onClick = { vm.save { newId -> app.replaceTop(Screen.Viewer(newId)) } },
+                        onClick = { vm.save { newId -> app.replaceTopIfCurrent(screenId, Screen.Viewer(newId)) } },
                         enabled = state.marks.isNotEmpty() && !state.saving,
                     ) { Text("Save") }
                 },

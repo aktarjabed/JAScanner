@@ -11,7 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -93,7 +93,10 @@ class SettingsRepository(private val context: Context) {
     }
 
     val editorMemory: Flow<EditorMemory> = context.settingsDataStore.data
-        .catch { error -> if (error is IOException) emit(emptyPreferences()) else throw error }
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(emptyPreferences())
+        }
         .map { prefs ->
             EditorMemory(
                 penColor = prefs[Keys.ED_PEN_COLOR],
@@ -125,7 +128,10 @@ class SettingsRepository(private val context: Context) {
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data
-        .catch { error -> if (error is IOException) emit(emptyPreferences()) else throw error }
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(emptyPreferences())
+        }
         .map { prefs ->
             val d = AppSettings()
             AppSettings(
