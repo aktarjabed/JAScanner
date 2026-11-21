@@ -39,8 +39,7 @@ All-in-one document scanner and PDF toolkit for Android. Original code, built fr
 ## Open it
 
 1. Install **Android Studio Quail 4 (2026.1.4) or newer** with JDK 17.
-2. Unzip, then *File > Open* the `JAScanner` folder. Android Studio downloads Gradle 9.6.0 from `gradle/wrapper/gradle-wrapper.properties` and syncs.
-   No `gradlew` script is included; if you want one, run `gradle wrapper --gradle-version 9.6.0` once.
+2. *File > Open* the `JAScanner` folder. Android Studio downloads Gradle 9.6.0 from `gradle/wrapper/gradle-wrapper.properties` and syncs; the Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`) is included.
 3. Run on a device or emulator with Android 12L (API 32) or newer and Google Play services.
 4. Unit tests (plain JVM): `./gradlew :app:testDebugUnitTest`.
 
