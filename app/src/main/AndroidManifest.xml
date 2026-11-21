@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+         JAScanner's own code declares no permissions. Everything it does goes through a
+         component that asks for access itself, each time, rather than JAScanner holding a
+         standing permission:
+           - Camera: Google's on-device document scanner (play-services-mlkit-document-scanner)
+             is its own Activity; it asks for camera access itself, only while it is on screen.
+             Expect android.permission.CAMERA in a Merged Manifest view from that library, not
+             from this file — JAScanner's own code never requests or checks it.
+           - Photos and files: picked one at a time through Android's own document/photo picker
+             (ActivityResultContracts), which needs no permission from the caller on any
+             supported API level.
+           - Internet: Play Services components (the document scanner, ML Kit text recognition,
+             the barcode scanner) may declare android.permission.INTERNET and
+             ACCESS_NETWORK_STATE to download their own on-device modules the first time they
+             run, and that is expected in the Merged Manifest too. JAScanner's own code opens no
+             network connection and uploads nothing.
+         See the in-app "Privacy & permissions" section (Settings) for the same explanation in
+         plain language, and README.md's Privacy section.
+    -->
+
+    <!-- Play Services-based libraries sometimes merge in the Advertising ID permission even when
+         unused; JAScanner has no ads and no analytics of its own, so it is explicitly removed
+         rather than left to chance. -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+
+    <!-- Lets "Read aloud" find the phone's text-to-speech engine (needed from Android 11). This is not a permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".JAScannerApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.JAScanner">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.JAScanner.Splash"
+            android:windowSoftInputMode="adjustResize">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Open PDFs from other apps (file managers, email, browsers). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <!-- "Share to JAScanner" for PDFs. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Shares PDFs, images and text files from the cache directory. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

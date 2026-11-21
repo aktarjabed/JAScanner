@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window theme only; styling comes from Compose Material 3. -->
+    <style name="Theme.JAScanner" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Shown for the moment between tapping the launcher icon and the first Compose frame.
+         No animated icon is set, so it falls back to the app's own launcher icon automatically. -->
+    <style name="Theme.JAScanner.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.JAScanner</item>
+    </style>
+</resources>

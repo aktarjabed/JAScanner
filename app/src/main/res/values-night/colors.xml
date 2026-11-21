@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A deeper navy in dark mode so the splash screen doesn't flash a bright blue. -->
+    <color name="splash_background">#FF0B3A66</color>
+</resources>
