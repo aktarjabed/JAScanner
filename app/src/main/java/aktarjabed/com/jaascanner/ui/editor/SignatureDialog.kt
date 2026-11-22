@@ -62,8 +62,10 @@ fun SignatureDialog(onPick: (Bitmap) -> Unit, onDismiss: () -> Unit) {
 
     var saved by remember { mutableStateOf<List<Pair<File, Bitmap>>>(emptyList()) }
     var reload by remember { mutableIntStateOf(0) }
-    // Picking or saving a signature starts a coroutine; ignore taps until it has been handed over.
+    // A picked or saved signature starts a coroutine; ignore taps until it has been handed over.
+    // A second tap before it completes could otherwise save/start twice.
     var picking by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     LaunchedEffect(reload) {
         saved = store.list().mapNotNull { file -> store.load(file)?.let { bitmap -> file to bitmap } }
     }

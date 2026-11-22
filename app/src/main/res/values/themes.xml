@@ -7,7 +7,7 @@
          No animated icon is set, so it falls back to the app's own launcher icon automatically. -->
     <style name="Theme.JAScanner.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
         <item name="postSplashScreenTheme">@style/Theme.JAScanner</item>
     </style>
 </resources>

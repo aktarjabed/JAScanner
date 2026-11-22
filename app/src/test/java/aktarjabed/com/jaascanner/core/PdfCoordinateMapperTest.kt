@@ -2,6 +2,7 @@ package aktarjabed.com.jaascanner.core
 
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 /**
  * The page box is 600 x 800 points with its origin at (0, 0). "Displayed" positions are
@@ -84,6 +85,16 @@ class PdfCoordinateMapperTest {
         assertEquals(800f, PdfCoordinateMapper.displayedWidth(box, 90), delta)
         assertEquals(600f, PdfCoordinateMapper.displayedWidth(box, 180), delta)
         assertEquals(800f, PdfCoordinateMapper.displayedWidth(box, 270), delta)
+    }
+
+    @Test
+    fun stampFallsBackToASquareWhenTheAspectIsZeroOrInvalid() {
+        for (aspect in listOf(0f, -2f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            val stamp = PdfCoordinateMapper.stamp(box, 0, 0.5f, 0.5f, widthFraction = 0.5f, aspect = aspect)
+            assertEquals("width for aspect $aspect", 300f, stamp.width, delta)
+            assertEquals("height for aspect $aspect", 300f, stamp.height, delta)
+            assertTrue("height must be finite for aspect $aspect", stamp.height.isFinite())
+        }
     }
 
     @Test

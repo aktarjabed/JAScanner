@@ -11,8 +11,13 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import aktarjabed.com.jaascanner.AppContainer
+import aktarjabed.com.jaascanner.data.AppSettings
+import aktarjabed.com.jaascanner.data.DocumentRepository.ImportTooLargeException
+import aktarjabed.com.jaascanner.data.LockGrace
 import aktarjabed.com.jaascanner.data.db.DocumentEntity
 import aktarjabed.com.jaascanner.ui.nav.Screen
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** One of these per screen on the back stack, so a screen's ViewModels die when it is popped. */
@@ -39,7 +44,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val owners = HashMap<Long, ScreenOwner>()
     private var lockEnabled = false
+    private var lockGraceMs = LockGrace.Seconds30.milliseconds
     private var stoppedAtMs = 0L
+
+    /**
+     * PDFs handed to us by another app while JAScanner is locked or still checking settings.
+     * A ViewModel survives rotation, so the URIs are held here rather than in the Activity. Nothing
+     * is copied into the library until [lockState] is [LockState.Unlocked].
+     */
+    private val pendingExternalUris = mutableListOf<Uri>()
 
     fun ownerFor(screen: Screen): ScreenOwner = owners.getOrPut(screen.id) { ScreenOwner() }
 
@@ -78,15 +91,60 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // --- Requests from outside the app -----------------------------------------------------
 
-    fun openExternalPdf(uri: Uri) {
-        viewModelScope.launch {
-            val document = container.documents.importFromUri(uri, null, DocumentEntity.SOURCE_IMPORT)
-            if (document == null) {
-                container.messenger.post("That file is not a readable PDF.")
-            } else {
-                push(Screen.Viewer(document.id))
-            }
+    fun openExternalPdf(uri: Uri) = openExternalPdfs(listOf(uri))
+
+    /** Queues everything the share sheet or a file manager handed us until the app is unlocked. */
+    fun openExternalPdfs(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (lockState != LockState.Unlocked) {
+            pendingExternalUris.addAll(uris)
+            return
         }
+        importExternal(uris)
+    }
+
+    private fun importExternal(uris: List<Uri>) {
+        viewModelScope.launch {
+            var imported = 0
+            var unreadable = 0
+            var tooLarge = 0
+            var firstImportedId: Long? = null
+            for (uri in uris) {
+                try {
+                    val document = container.documents.importFromUri(uri, null, DocumentEntity.SOURCE_IMPORT)
+                    if (document == null) {
+                        unreadable++
+                    } else {
+                        imported++
+                        if (firstImportedId == null) firstImportedId = document.id
+                        if (container.settings.settings.first().autoOcr) {
+                            container.ocrIndexer.indexInBackground(document.id)
+                        }
+                    }
+                } catch (error: ImportTooLargeException) {
+                    tooLarge++
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    unreadable++
+                }
+            }
+            val parts = mutableListOf<String>()
+            if (imported == 1) parts += "Imported 1 PDF."
+            if (imported > 1) parts += "Imported $imported PDFs."
+            if (unreadable > 0) parts += "$unreadable file(s) could not be read as PDFs."
+            if (tooLarge > 0) parts += "$tooLarge file(s) were over the 200 MB import limit."
+            if (parts.isNotEmpty()) container.messenger.post(parts.joinToString(" "))
+            if (imported == 1) firstImportedId?.let { push(Screen.Viewer(it)) }
+        }
+    }
+
+    /** Imports anything that arrived while locked, once the lock is gone. */
+    private fun drainPendingImports() {
+        if (lockState != LockState.Unlocked || pendingExternalUris.isEmpty()) return
+        val queued = pendingExternalUris.toList()
+        pendingExternalUris.clear()
+        importExternal(queued)
     }
 
     fun requestJump(documentId: Long, page: Int) {
@@ -107,36 +165,37 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // --- App lock --------------------------------------------------------------------------
 
-    fun onSettingsLoaded(appLockEnabled: Boolean) {
-        lockEnabled = appLockEnabled
-        if (!appLockEnabled) {
+    fun onSettingsLoaded(settings: AppSettings) {
+        lockEnabled = settings.appLock
+        lockGraceMs = settings.lockGrace.milliseconds
+        if (!lockEnabled) {
             lockState = LockState.Unlocked
         } else if (lockState == LockState.Checking) {
             lockState = LockState.Locked
         }
+        drainPendingImports()
     }
 
     fun onActivityStopped() {
         stoppedAtMs = SystemClock.elapsedRealtime()
+        // "Immediately" has no grace window: lock as soon as the app leaves the foreground.
+        if (lockEnabled && lockGraceMs == 0L) lockState = LockState.Locked
     }
 
     fun onActivityStarted() {
         val away = SystemClock.elapsedRealtime() - stoppedAtMs
-        if (lockEnabled && lockState == LockState.Unlocked && stoppedAtMs != 0L && away > RELOCK_AFTER_MS) {
+        if (lockEnabled && lockState == LockState.Unlocked && stoppedAtMs != 0L && lockGraceMs > 0L && away >= lockGraceMs) {
             lockState = LockState.Locked
         }
     }
 
     fun unlock() {
         lockState = LockState.Unlocked
+        drainPendingImports()
     }
 
     override fun onCleared() {
         owners.values.forEach { it.viewModelStore.clear() }
         owners.clear()
-    }
-
-    private companion object {
-        const val RELOCK_AFTER_MS = 30_000L
     }
 }

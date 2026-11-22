@@ -94,6 +94,7 @@ private fun ScanTab() {
     val container = context.container
     val scope = rememberCoroutineScope()
     var result by rememberSaveable { mutableStateOf<String?>(null) }
+    var scanning by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -104,22 +105,30 @@ private fun ScanTab() {
                 "so JAScanner itself needs no camera permission.",
             style = MaterialTheme.typography.bodyMedium,
         )
-        Button(onClick = {
-            scope.launch {
-                try {
-                    val options = GmsBarcodeScannerOptions.Builder()
-                        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-                        .build()
-                    val barcode = GmsBarcodeScanning.getClient(context, options).startScan().awaitResult()
-                    result = barcode.rawValue ?: barcode.displayValue
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    val cancelled = error.message?.contains("cancel", ignoreCase = true) == true
-                    if (!cancelled) container.messenger.post("The code scanner is not available on this device.")
+        Button(
+            onClick = {
+                if (scanning) return@Button
+                scanning = true
+                scope.launch {
+                    try {
+                        val options = GmsBarcodeScannerOptions.Builder()
+                            .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+                            .build()
+                        val barcode = GmsBarcodeScanning.getClient(context, options).startScan().awaitResult()
+                        result = barcode.rawValue ?: barcode.displayValue
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        val cancelled = error.message?.contains("cancel", ignoreCase = true) == true
+                        if (!cancelled) container.messenger.post("The code scanner is not available on this device.")
+                    } finally {
+                        // The scanner has returned (even on cancellation), so allow another scan.
+                        scanning = false
+                    }
                 }
-            }
-        }) { Text("Scan a code") }
+            },
+            enabled = !scanning,
+        ) { Text(if (scanning) "Scanning..." else "Scan a code") }
 
         val scanned = result
         if (scanned != null) {
@@ -132,7 +141,11 @@ private fun ScanTab() {
                             copy(context, scanned)
                             container.messenger.post("Copied.")
                         }) { Text("Copy") }
-                        TextButton(onClick = { ShareHelper.shareText(context, scanned) }) { Text("Share") }
+                        TextButton(onClick = {
+                            if (!ShareHelper.shareText(context, scanned)) {
+                                container.messenger.post("No app can share text on this device.")
+                            }
+                        }) { Text("Share") }
                         if (scanned.startsWith("http://") || scanned.startsWith("https://")) {
                             TextButton(onClick = {
                                 try {
@@ -165,6 +178,7 @@ private fun CreateTab() {
     val scope = rememberCoroutineScope()
     var text by rememberSaveable { mutableStateOf("") }
     var qr by remember { mutableStateOf<Bitmap?>(null) }
+    var sharing by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -197,22 +211,29 @@ private fun CreateTab() {
                 contentDescription = "QR code",
                 modifier = Modifier.size(260.dp).background(androidx.compose.ui.graphics.Color.White),
             )
-            OutlinedButton(onClick = {
-                scope.launch {
-                    try {
-                        val file = withContext(Dispatchers.IO) {
-                            File(context.cacheDir, "qr-code.png").also { target ->
-                                target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            OutlinedButton(
+                onClick = {
+                    if (sharing) return@OutlinedButton
+                    sharing = true
+                    scope.launch {
+                        try {
+                            val file = withContext(Dispatchers.IO) {
+                                File(context.cacheDir, "qr-code.png").also { target ->
+                                    target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                                }
                             }
+                            ShareHelper.sharePng(context, file, "JAScanner QR code")
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            container.messenger.post("Could not share the QR code.")
+                        } finally {
+                            sharing = false
                         }
-                        ShareHelper.sharePng(context, file, "JAScanner QR code")
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        container.messenger.post("Could not share the QR code.")
                     }
-                }
-            }) { Text("Share picture") }
+                },
+                enabled = !sharing,
+            ) { Text(if (sharing) "Sharing..." else "Share picture") }
         }
     }
 }

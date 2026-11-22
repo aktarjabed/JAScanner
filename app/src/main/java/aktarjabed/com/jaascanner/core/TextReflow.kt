@@ -89,7 +89,9 @@ object TextReflow {
             var rest = sentence.trim()
             while (rest.length > maxLength) {
                 flush()
-                val cut = rest.lastIndexOf(' ', maxLength).let { if (it < maxLength / 2) maxLength else it }
+                val space = rest.lastIndexOf(' ', maxLength)
+                val requested = if (space < maxLength / 2) maxLength else space
+                val cut = safeCut(rest, requested)
                 chunks.add(rest.substring(0, cut).trim())
                 rest = rest.substring(cut).trim()
             }
@@ -99,5 +101,15 @@ object TextReflow {
         }
         flush()
         return chunks
+    }
+
+    /**
+     * Never cuts between the two halves of a surrogate pair. A speech engine given a lone
+     * surrogate either rejects the whole utterance or speaks a replacement character.
+     */
+    private fun safeCut(text: String, requested: Int): Int {
+        var cut = requested.coerceIn(1, text.length)
+        if (cut < text.length && text[cut - 1].isHighSurrogate() && text[cut].isLowSurrogate()) cut--
+        return cut
     }
 }

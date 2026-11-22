@@ -49,7 +49,10 @@ class ThumbnailLoader {
 @Composable
 fun DocThumbnail(file: File, version: Long, modifier: Modifier = Modifier, widthPx: Int = 360) {
     val loader = LocalContext.current.container.thumbnails
-    val bitmap by produceState<Bitmap?>(initialValue = null, file.absolutePath, version) {
+    // widthPx is part of the cache key inside the loader, so it must be part of the effect key
+    // too; otherwise a thumbnail first drawn small keeps its low-resolution bitmap when the same
+    // composable is reused at a larger size.
+    val bitmap by produceState<Bitmap?>(initialValue = null, file.absolutePath, version, widthPx) {
         value = loader.load(file, version, widthPx)
     }
     Box(modifier.background(Color.White)) {

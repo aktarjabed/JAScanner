@@ -1,7 +1,9 @@
 # Desktop test harness (not part of the app build)
 
-These drivers were used to exercise the app's PDF code on a normal JVM, without an emulator.
-They are kept so you can repeat the checks. They are NOT compiled by Gradle.
+These drivers were used to exercise the app's PDF code and pure Kotlin logic on a normal JVM,
+without an emulator. They are kept so you can repeat the checks. They are NOT compiled by Gradle,
+and they are a **pure logic / PDF-library check only** — not a phone test and not a substitute for
+`./gradlew :app:testDebugUnitTest`.
 
 How it was done:
 1. Build Apache PDFBox 2.0.27 (desktop) from source; PDFBox-Android has the same API under `com.tom_roush.pdfbox`.
@@ -10,7 +12,10 @@ How it was done:
 4. Compile with kotlinc and run a driver: `Driver2` (page tools and forms), `Driver3` (500-page file, damaged and empty files, error messages), `Driver4` (text edits with the look-alike fallback), `Driver` (single in-place word edit).
 5. Check outputs with `qpdf --check`, `pdftotext` and `pdftoppm`.
 
-Drivers expect test PDFs (five.pdf, two.pdf, form.pdf, big500.pdf, lo.pdf) in a `pdf/` folder; generate them with reportlab and LibreOffice.
+Drivers expect test PDFs (five.pdf, two.pdf, form.pdf, big500.pdf, lo.pdf) in a `pdf/` folder;
+the round-3 folder now ships a standard-library-only generator for its own fixtures
+(`round3/make_fixtures.py`). The older round-1/2 drivers still expect their original PDFs, which
+are not shipped; generate equivalents with reportlab and LibreOffice if you need to rerun them.
 
 Added in round 2:
 - `Fuzz.kt`: swaps one letter in random words of several PDFs (Chrome, LibreOffice, Cairo, rotated, object-stream) and checks the page text changes exactly as intended.
@@ -19,4 +24,7 @@ Added in round 2:
 
 Added in round 3 (searchable-PDF text layer, bookmarks, comments, compress-that-keeps-text, page
 rearrange): see `round3/README.md`. Same method, with the scripts parameterised by environment
-variable instead of hardcoded sandbox paths, so they can actually be rerun elsewhere.
+variable instead of hardcoded sandbox paths, so they can actually be rerun elsewhere. The scripts
+now use `set -euo pipefail` and fail on a non-zero Kotlin compiler exit; they no longer hide
+compiler errors behind `grep ... || true`. `round3/run_unit.sh` reproduces the current **99**
+JVM tests, and `round3/make_fixtures.py` generates its PDF inputs from a clean checkout.

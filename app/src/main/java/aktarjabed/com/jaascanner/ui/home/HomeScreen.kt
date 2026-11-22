@@ -82,6 +82,7 @@ fun HomeScreen(app: AppViewModel) {
     var scanMenu by remember { mutableStateOf(false) }
     // Saved so the guard survives an activity recreation while the scanner is open.
     var scanStarting by rememberSaveable { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
 
     val selectedDocs = state.documents.filter { it.id in state.selection }
     val selectedIds = selectedDocs.map { it.id }
@@ -153,20 +154,25 @@ fun HomeScreen(app: AppViewModel) {
                         if (selectedDocs.size < state.documents.size) {
                             TextButton(onClick = vm::selectAll) { Text("All") }
                         }
-                        if (selectedDocs.size == 1) {
-                            IconButton(onClick = {
-                                val doc = selectedDocs.first()
+                        IconButton(
+                            enabled = !sharing,
+                            onClick = {
+                                if (sharing) return@IconButton
+                                sharing = true
+                                val chosen = selectedDocs.map { container.documents.fileOf(it) to it.name }
                                 scope.launch {
                                     try {
-                                        ShareHelper.sharePdf(context, container.documents.fileOf(doc), doc.name)
+                                        ShareHelper.sharePdfs(context, chosen)
                                     } catch (error: CancellationException) {
                                         throw error
                                     } catch (error: Exception) {
                                         container.messenger.post(error.toUserMessage())
+                                    } finally {
+                                        sharing = false
                                     }
                                 }
-                            }) { Icon(Icons.Filled.Share, contentDescription = "Share") }
-                        }
+                            },
+                        ) { Icon(Icons.Filled.Share, contentDescription = "Share") }
                         IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
                         Box {
                             IconButton(onClick = { overflow = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }

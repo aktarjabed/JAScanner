@@ -1,6 +1,7 @@
 package aktarjabed.com.jaascanner.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -82,6 +83,32 @@ class ReadingFiltersTest {
     }
 
     @Test
+    fun speechChunksNeverCutThroughASurrogatePair() {
+        // Every emoji is two UTF-16 units. An odd limit lands inside the pair on every cut.
+        val text = "😀".repeat(500)
+        val chunks = TextReflow.speechChunks(text, maxLength = 101)
+        assertTrue(chunks.isNotEmpty())
+        chunks.forEach { chunk ->
+            assertTrue(chunk.length <= 101)
+            assertFalse("chunk starts with a lone low surrogate", chunk.first().isLowSurrogate())
+            assertFalse("chunk ends with a lone high surrogate", chunk.last().isHighSurrogate())
+            var i = 0
+            while (i < chunk.length) {
+                val c = chunk[i]
+                if (c.isHighSurrogate()) {
+                    assertTrue("high surrogate at end of chunk", i + 1 < chunk.length)
+                    assertTrue("high surrogate not followed by low", chunk[i + 1].isLowSurrogate())
+                    i += 2
+                } else {
+                    assertFalse("lone low surrogate", c.isLowSurrogate())
+                    i++
+                }
+            }
+        }
+        assertEquals(text.length, chunks.joinToString("").length)
+    }
+
+    @Test
     fun lightenBrightensGreyAndKeepsBlackAndWhite() {
         val out = PixelFilters.lighten(intArrayOf(rgb(0, 0, 0), rgb(128, 128, 128), rgb(255, 255, 255)))
         assertEquals(0, red(out[0]))
@@ -106,6 +133,30 @@ class ReadingFiltersTest {
         assertTrue("green ${green(out[1])}", green(out[1]) > 235)
         assertTrue("blue ${blue(out[1])}", blue(out[1]) > 225)
         assertTrue(red(out[0]) < 60)
+    }
+
+    @Test
+    fun magicColorSamplingDoesNotAliasAPeriodSevenPattern() {
+        // A fixed every-7th-pixel sample would see only the black phase and set the paper level
+        // to 0, blowing out the grey. Co-prime sampling sees all phases and keeps it mid-grey.
+        val pixels = IntArray(700) { index ->
+            when (index % 7) {
+                0 -> rgb(0, 0, 0)
+                1 -> rgb(100, 100, 100)
+                else -> rgb(200, 200, 200)
+            }
+        }
+        val out = PixelFilters.magicColor(pixels)
+        assertTrue("grey phase was over-brightened: ${red(out[1])}", red(out[1]) < 200)
+        assertEquals(0, red(out[0]))
+    }
+
+    @Test
+    fun samplingCoversEveryPhaseOfAPeriodicImage() {
+        val indices = PixelFilters.sampleIndices(size = 70_000, maxSamples = 1_000)
+        assertEquals(1_000, indices.size)
+        assertEquals((0..6).toSet(), indices.map { it % 7 }.toSet())
+        assertEquals(indices.size, indices.toSet().size)
     }
 
     @Test

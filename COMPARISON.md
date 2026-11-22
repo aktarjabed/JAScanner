@@ -1,6 +1,6 @@
 # JAScanner compared with Adobe Acrobat Reader and Document Scanner – PDF Creator
 
-Written 29 Oct 2026, updated 31 Oct 2026 after a round of implementing the features this file had flagged as most important. Read this first: **JAScanner has never been built with Gradle or run on a phone.** The other two apps have hundreds of millions and tens of millions of installs. Every "ahead" below is about a specific feature or about price and privacy, not about overall quality.
+Written 29 Oct 2026, updated 31 Oct 2026 after a round of implementing the features this file had flagged as most important, and updated again after the first successful Gradle build. Read this first: **JAScanner now compiles on Termux, its 99 JVM tests pass and it produces a debug APK, but it has still never been run on a phone.** The other two apps have hundreds of millions and tens of millions of installs. Every "ahead" below is about a specific feature or about price and privacy, not about overall quality.
 
 **What changed since 29 Oct:** an embedded, invisible OCR text layer (searchable PDF, not just library search); compress that keeps real text as text; a page-thumbnail grid with drag reorder, rotate, delete and duplicate; bookmarks and sticky-note comments stored inside the PDF; an image watermark that can repeat across the page; reading mode with text reflow and read-aloud; three more clean-up filters (Lighten, Magic colour, Strong contrast); an icon bottom bar and a share icon in the viewer. Office export/import, cloud upload, an AI assistant and fax were deliberately not attempted — see section 6.
 
@@ -9,7 +9,7 @@ Written 29 Oct 2026, updated 31 Oct 2026 after a round of implementing the featu
 rea (morluto/rea) is a reverse-engineering toolkit. For Android it opens an APK with JADX and reports the manifest, permissions, classes and decompiled methods.
 
 - **Not done: rea on the Adobe or Document Scanner APKs.** That would mean decompiling two commercial apps to see how they work. JAScanner's rule from the start has been original code only, and rea's own `DISCLAIMER.md` also lists "copying proprietary software or reproducing its protected code and assets" as something it does not support. Their APKs could not be fetched here either (Play Store is not reachable from the sandbox shell).
-- **Not done: rea on JAScanner.** There is no APK yet, so there is nothing for it to open. The `apk-out` folder in the sandbox holds only compiled class files for type-checking.
+- **Not done: rea on JAScanner.** A debug APK now exists at `app/build/outputs/apk/debug/app-debug.apk`, but rea has not been run on it yet. Section 5 has the steps.
 - **Done instead:** the other apps are compared from their public Google Play listings and Adobe's public help pages (sources at the end). JAScanner's side comes from its own tests (`AUDIT.md`).
 - **Where rea fits:** once you have built a debug APK, rea can check JAScanner itself. See section 5.
 
@@ -36,7 +36,7 @@ Key: **Ahead** = JAScanner does it and the listing does not show it for that app
 | Edit existing text | Paid; text and images, paragraphs | No | One word at a time on real-text PDFs, free. Same-font in-place change, fallback cover-and-redraw. 196 random edits **run**: 112 in place, 84 refused, 0 wrong. No paragraph or image editing | **Ahead on price only**, **Behind** on power |
 | Handwriting-style text | Not named | Not named | Cursive and Casual faces. Font availability on phones **not checked** | Unverified |
 | Editor memory (colours, widths, recent text) | Not named | Not named | Yes, local only, with a forget button | Small **Ahead** |
-| Reading mode, read aloud | Liquid Mode reflow (free); read aloud is a paid, better-voice feature | No | Text reflow (size, serif/plain, paper colour) and read aloud, both free, using the phone's own TTS voices. Reflow/chunking logic **run** (72 unit tests); the TTS controller itself phone-untested | **Ahead on price**, **Behind** on Liquid Mode's image/table reflow and Adobe's higher-quality voices |
+| Reading mode, read aloud | Liquid Mode reflow (free); read aloud is a paid, better-voice feature | No | Text reflow (size, serif/plain, paper colour) and read aloud, both free, using the phone's own TTS voices. Reflow/chunking logic **run** (99 unit tests now); the TTS controller itself phone-untested | **Ahead on price**, **Behind** on Liquid Mode's image/table reflow and Adobe's higher-quality voices |
 | OCR | Paid; makes the PDF searchable and editable | "Upcoming" in the listing | On-device (Latin and Devanagari): copy, share, .txt, searchable in the library, **and now an embedded invisible text layer** ("Save a searchable PDF copy") so any reader can select and search it. Text-layer placement, rotation handling and odd-input cases **run** on real PDFs; ML Kit box detection itself phone-untested | **Ahead** of Document Scanner, **close to parity** with Adobe on the searchable-PDF feature itself (Adobe's OCR is also said to make text editable, which JAScanner's does not) |
 | Scan capture | Separate Adobe Scan app | Auto and manual enhance, smart crop, noise removal, flashlight | Google's on-device scanner: edge detection, crop, perspective, filters, gallery import, up to 500 pages requested. Phone-untested | **Parity on paper**, unproven |
 | Filters | Not named | B/W, Lighten, Color, dark; premium filters | Enhanced, Grayscale, Black and white, **Lighten, Magic colour, Strong contrast**. B/W handles shadows (synthetic test, speckle at hard edges remains); the three new filters **run** on synthetic images only | **Closer to parity** on filter count, still unproven on real photos for the new ones |
@@ -59,7 +59,7 @@ Key: **Ahead** = JAScanner does it and the listing does not show it for that app
 | App lock | Not named | Not named | Biometric / screen lock, hide preview, block screenshots. Phone-untested | **Ahead** (not named by the others) |
 | Ads, accounts, purchases | Ads, purchases | Ads | None in the code | **Ahead**, and the strongest honest point |
 | Data handling | Developer reports sharing with third parties | Developer reports sharing; deletion not possible | JAScanner declares no permissions of its own and uploads nothing. Google ML Kit pieces follow Google's policies. Merged manifest **not checked** | **Ahead on design**, to be verified |
-| Maturity | Years of device testing | Years of device testing | Never compiled with Gradle or run on a device | **Far behind** |
+| Maturity | Years of device testing | Years of device testing | Compiled with Gradle and unit-tested; never run on a device | **Far behind** |
 
 ## 4. Scoreboard
 
@@ -67,13 +67,13 @@ Key: **Ahead** = JAScanner does it and the listing does not show it for that app
 - **Parity**: scanning basics, folders, QR, images to PDF, annotations and comments, drag reorder, page thumbnails and bookmarks (on paper; Adobe's versions are proven on-device and these are not), watermark, read aloud, compress (now without forcing the text-loss trade-off).
 - **Behind**: reading comfort versus Liquid Mode specifically (which also reflows images and tables, not just text), depth of text editing, polish, Adobe's higher-quality TTS voices.
 - **Missing**: Office export and import, cloud upload, AI assistant, fax — all four were deliberately left out of this round; see section 6.
-- **Unproven**: everything that touches the Android UI, the Google scanner, ML Kit's actual box detection, TTS voices on a real phone, drag gestures, fonts, performance on low-memory phones. This round added code but no device testing, so the gap between "built" and "proven" is now bigger than it was, not smaller.
+- **Unproven**: everything that touches the Android UI, the Google scanner, ML Kit's actual box detection, TTS voices on a real phone, drag gestures, fonts, performance on low-memory phones. This round added code but no device testing; the project has since been compiled with Gradle and its JVM tests pass, but the gap between "built" and "proven on a phone" remains.
 
 Word-for-word, the claim "unbeatable" does not hold. The honest claim is: a free, ad-free, offline toolkit that now covers most of what the two apps charge for or advertise — including several things that were gaps a few days ago — plus a few extras, and a shorter but still real list of remaining gaps, none of it proven on an actual phone yet.
 
 ## 5. How to use rea on JAScanner itself (not run yet)
 
-After Android Studio builds a debug APK (`app/build/outputs/apk/debug/app-debug.apk`):
+The debug APK is now built at `app/build/outputs/apk/debug/app-debug.apk` (rebuild with `./gradlew :app:assembleDebug`). To inspect it with rea:
 
 1. Get a full JDK 17+ and the pinned `jadx-headless-mcp-0.7.1-all.jar`; set `REA_JADX_MCP_JAR` to it. `docs/android-analysis.md` in rea has the download and SHA-256 check.
 2. Run `rea inspect-android-package app-debug.apk` and read:
@@ -84,9 +84,9 @@ After Android Studio builds a debug APK (`app/build/outputs/apk/debug/app-debug.
 
 ## 6. What to do next
 
-1. Open the project in Android Studio, sync, build, and send the first errors back. This is still the biggest gap, and it has grown: round 3 added a Compose page-grid with drag gestures, a TTS controller, and more screens, none of which has been near a compiler that actually understands Android.
+1. Install the debug APK on a phone and send the first runtime/UI errors back. The project now compiles with Android Gradle on Termux, but round 3's Compose page-grid with drag gestures, the TTS controller and the rest of the UI have still never run on a device. `PLAN.md` section 7 is the checklist.
 2. Deliberately not attempted this round, in rough order of how often the two listings mention them: Office (Word/Excel/PowerPoint) export and import, cloud upload (Drive/Dropbox/OneDrive), an AI assistant, fax. Each would need either a new library (Office formats), a cloud SDK and account system (upload — a real change to the "no internet permission" privacy story), or a different kind of feature entirely (AI). None were started so as not to half-build any of them.
-3. Once the project compiles: table of contents as its own view (bookmarks exist but are shown as a flat/nested list, not a TOC page), visual crop with drag handles, select/move/resize/delete a single editor mark after placing it, text-snapped highlight/underline/strikeout.
+3. Once the app has had a first device test: table of contents as its own view (bookmarks exist but are shown as a flat/nested list, not a TOC page), visual crop with drag handles, select/move/resize/delete a single editor mark after placing it, text-snapped highlight/underline/strikeout.
 
 ## Sources
 

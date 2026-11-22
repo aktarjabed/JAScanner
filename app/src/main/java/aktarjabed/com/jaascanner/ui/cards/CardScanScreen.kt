@@ -79,8 +79,12 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
     // Survives process death: a picture taken after a restart must still go to the right side.
     var target by rememberSaveable { mutableIntStateOf(0) }
     val targetSide = target.takeIf { it in state.sides.indices }
+    // A second tap before the camera/gallery returns can launch the same contract twice, which
+    // throws on some OEMs. Kept across recreation because the scanner is an external Activity.
+    var scanStarting by rememberSaveable { mutableStateOf(false) }
 
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        scanStarting = false
         if (result.resultCode == Activity.RESULT_OK) {
             val uri = ScannerLauncher.parseCardResult(result.data)
             val index = targetSide
@@ -94,22 +98,30 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
         }
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        scanStarting = false
         val index = targetSide
         if (uri != null && index != null) vm.setSide(context, index, uri)
     }
 
     val scanSide: (Int) -> Unit = { index ->
-        target = index
-        val activity = context.findActivity()
-        if (activity != null) {
-            scope.launch {
-                try {
-                    val sender = ScannerLauncher.startCardIntentSender(activity)
-                    scanLauncher.launch(IntentSenderRequest.Builder(sender).build())
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
+        if (!scanStarting) {
+            scanStarting = true
+            target = index
+            val activity = context.findActivity()
+            if (activity == null) {
+                scanStarting = false
+            } else {
+                scope.launch {
+                    try {
+                        val sender = ScannerLauncher.startCardIntentSender(activity)
+                        scanLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                    } catch (error: CancellationException) {
+                        scanStarting = false
+                        throw error
+                    } catch (error: Exception) {
+                        scanStarting = false
+                        container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
+                    }
                 }
             }
         }
@@ -149,11 +161,18 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
                                 Text("Not captured yet", style = MaterialTheme.typography.bodySmall)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Button(onClick = { scanSide(index) }) { Text(if (side.photo == null) "Scan" else "Rescan") }
-                                OutlinedButton(onClick = {
-                                    target = index
-                                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                }) { Text("Gallery") }
+                                Button(onClick = { scanSide(index) }, enabled = !scanStarting) {
+                                    Text(if (side.photo == null) "Scan" else "Rescan")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        if (scanStarting) return@OutlinedButton
+                                        scanStarting = true
+                                        target = index
+                                        galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
+                                    enabled = !scanStarting,
+                                ) { Text("Gallery") }
                                 if (side.photo != null) TextButton(onClick = { vm.clearSide(index) }) { Text("Remove") }
                             }
                         }

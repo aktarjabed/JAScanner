@@ -87,6 +87,7 @@ fun LibraryContent(
             value = state.query,
             onValueChange = vm::setQuery,
             singleLine = true,
+            label = { Text("Search documents") },
             placeholder = { Text("Search names and scanned text") },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
@@ -232,6 +233,8 @@ fun LibraryContent(
                         selected = doc.id in state.selection,
                         onClick = { if (selecting) vm.toggleSelect(doc.id) else onOpen(doc) },
                         onLongClick = { vm.toggleSelect(doc.id) },
+                        onClickLabel = if (selecting) "Toggle selection" else "Open document",
+                        onLongClickLabel = "Select document",
                         onFavorite = { vm.toggleFavorite(doc.id, doc.favorite) },
                     )
                 }
@@ -246,6 +249,8 @@ fun LibraryContent(
                         selected = doc.id in state.selection,
                         onClick = { if (selecting) vm.toggleSelect(doc.id) else onOpen(doc) },
                         onLongClick = { vm.toggleSelect(doc.id) },
+                        onClickLabel = if (selecting) "Toggle selection" else "Open document",
+                        onLongClickLabel = "Select document",
                         onFavorite = { vm.toggleFavorite(doc.id, doc.favorite) },
                     )
                 }
@@ -364,11 +369,18 @@ private fun GridCard(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onClickLabel: String,
+    onLongClickLabel: String,
     onFavorite: () -> Unit,
 ) {
     val file = LocalContext.current.container.documents.fileOf(doc)
     Card(
-        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = Modifier.combinedClickable(
+            onClickLabel = onClickLabel,
+            onLongClickLabel = onLongClickLabel,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        ),
         border = if (selected) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -410,6 +422,8 @@ private fun ListRow(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onClickLabel: String,
+    onLongClickLabel: String,
     onFavorite: () -> Unit,
 ) {
     val file = LocalContext.current.container.documents.fileOf(doc)
@@ -438,6 +452,11 @@ private fun ListRow(
                 )
             }
         },
-        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = Modifier.combinedClickable(
+            onClickLabel = onClickLabel,
+            onLongClickLabel = onLongClickLabel,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        ),
     )
 }

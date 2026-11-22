@@ -1,6 +1,6 @@
 # JAScanner: where it wins, what is missing, and plan v2
 
-Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "Wins" means "offers more for free, or more privately, on paper". None of it is proven until the app compiles and runs on a phone.
+Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "Wins" means "offers more for free, or more privately, on paper". The app now compiles with Gradle and its JVM tests pass, but none of it is proven until it runs on a phone.
 
 **Round 3 update:** the items below marked `[done]` were built and are described in `README.md` and `COMPARISON.md` — an embedded OCR text layer, compress that keeps text, a page-thumbnail grid with drag reorder/rotate/delete/duplicate, bookmarks and sticky-note comments stored inside the PDF, an image/tiled watermark, and a reading mode with read-aloud. Everything else below is still accurate.
 
@@ -22,7 +22,7 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 - Edit existing PDF text: now word-by-word (see README). Whole-paragraph reflow and image editing: not implemented.
 - Reading mode now reflows text and reads it aloud (see above), narrowing but not closing the gap with Adobe's Liquid Mode, which also reflows images and tables. AI assistant, PDF Spaces, Adobe Express, cloud accounts: not implemented.
 - Word / Excel / PowerPoint conversion, web page to PDF, fax: not implemented.
-- Maturity: both apps are proven at scale. JAScanner has never been compiled or run.
+- Maturity: both apps are proven at scale. JAScanner compiles and its JVM tests pass, but it has never been run on a phone.
 - Scan quality is Google's scanner, not ours.
 
 ## 3. Editing: what is implemented and what is not
@@ -45,9 +45,9 @@ Not implemented:
 ## 4. Plan v2 (in order)
 
 ### Phase 0: make it real (blocks everything)
-- Open in Android Studio, sync, fix compile errors, run the unit tests.
+- ~~Compile it and run the unit tests.~~ `[done]` — `./gradlew :app:testDebugUnitTest` (99 tests) and `:app:assembleDebug` succeed on Termux.
 - Run on a real phone: scan, import, every tool once, form fill, app lock. Check the Merged Manifest for added permissions.
-- Test the database migration 1 to 2 on a phone that had the first build.
+- Test the database migrations (1→2 and 2→3) on a phone that had an earlier build.
 - Exit: debug build installs and the test plan in PLAN.md section 7 passes.
 
 ### Phase 1: editing that people notice

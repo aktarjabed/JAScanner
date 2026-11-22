@@ -11,7 +11,9 @@ object PixelFilters {
     private const val OPAQUE = 0xFF000000.toInt()
     private const val PAPER_PERCENTILE = 0.92f
     private const val MAX_GAIN = 2.2f
-    private const val SAMPLE_STEP = 7
+
+    /** Enough samples for a stable percentile, few enough to stay fast on a 12 MP photo. */
+    private const val MAX_SAMPLES = 65_536
 
     /** Brightens mid-tones and whitens the paper while keeping real black text dark. */
     fun lighten(pixels: IntArray): IntArray {
@@ -37,17 +39,14 @@ object PixelFilters {
     fun magicColor(pixels: IntArray): IntArray {
         if (pixels.isEmpty()) return pixels
         val histograms = Array(3) { IntArray(256) }
-        var counted = 0
-        var index = 0
-        while (index < pixels.size) {
+        val indices = sampleIndices(pixels.size)
+        for (index in indices) {
             val c = pixels[index]
             histograms[0][(c shr 16) and 0xFF]++
             histograms[1][(c shr 8) and 0xFF]++
             histograms[2][c and 0xFF]++
-            counted++
-            index += SAMPLE_STEP
         }
-        val limit = (counted * PAPER_PERCENTILE).toInt()
+        val limit = (indices.size * PAPER_PERCENTILE).toInt()
         val gains = FloatArray(3) { channel ->
             var running = 0
             var level = 255
@@ -73,6 +72,34 @@ object PixelFilters {
             OPAQUE or (r shl 16) or (g shl 8) or b
         }
     }
+
+    /**
+     * Positions to sample for the paper-colour histogram.
+     *
+     * A fixed "every 7th pixel" step aliases with periodic content: a striped or halftone scan
+     * whose period shares a factor with 7 is sampled at one phase only, so the percentile can
+     * describe an unrepresentative colour. Here the stride is co-prime with the image size, so
+     * the samples walk through every phase instead of repeating one. Small images are sampled
+     * exhaustively.
+     */
+    internal fun sampleIndices(size: Int, maxSamples: Int = MAX_SAMPLES): IntArray {
+        if (size <= 0 || maxSamples <= 0) return IntArray(0)
+        val count = minOf(size, maxSamples)
+        if (count == size) return IntArray(size) { it }
+        var step = (size / count).coerceAtLeast(1)
+        while (gcd(step, size) != 1) step++
+        var index = 0
+        return IntArray(count) { i ->
+            if (i == 0) {
+                0
+            } else {
+                index = (index + step) % size
+                index
+            }
+        }
+    }
+
+    private tailrec fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
 
     private inline fun map(pixels: IntArray, channel: (Int) -> Int): IntArray = IntArray(pixels.size) { i ->
         val c = pixels[i]

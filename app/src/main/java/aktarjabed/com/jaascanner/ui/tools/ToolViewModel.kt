@@ -26,6 +26,7 @@ import aktarjabed.com.jaascanner.pdf.TextBitmaps
 import aktarjabed.com.jaascanner.pdf.toUserMessage
 import aktarjabed.com.jaascanner.ui.nav.ToolKind
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -288,6 +289,10 @@ class ToolViewModel(
                         message = outcome.message,
                     )
                 }
+            } catch (error: CancellationException) {
+                // The app-wide scope was cancelled (process shutdown), not the user leaving the
+                // screen: that is expected to stop the job, not to show an error.
+                throw error
             } catch (error: Throwable) {
                 mutableState.update { it.copy(running = false, progress = null, message = error.toUserMessage()) }
             } finally {

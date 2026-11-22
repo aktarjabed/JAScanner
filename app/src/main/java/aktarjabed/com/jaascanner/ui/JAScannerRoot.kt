@@ -54,15 +54,34 @@ fun JAScannerRoot(app: AppViewModel) {
         }
     }
 
-    LaunchedEffect(settings?.appLock) {
-        settings?.let { app.onSettingsLoaded(it.appLock) }
+    LaunchedEffect(settings?.appLock, settings?.lockGrace) {
+        settings?.let(app::onSettingsLoaded)
     }
 
     JAScannerTheme(settings?.themeMode ?: ThemeMode.System, dynamicColor = settings?.useDynamicColor ?: false) {
         Surface(Modifier.fillMaxSize()) {
             val snackbarHost = remember { SnackbarHostState() }
+            // Messages posted while the lock screen is up are held, not shown over it, and are
+            // delivered once the user unlocks. The collector itself must stay alive the whole time
+            // or a posted message would be lost (Messenger is a SharedFlow without replay).
+            val heldWhileLocked = remember { mutableListOf<String>() }
             LaunchedEffect(Unit) {
-                container.messenger.messages.collect { text -> snackbarHost.showSnackbar(text) }
+                container.messenger.messages.collect { text ->
+                    if (app.lockState == LockState.Unlocked) {
+                        snackbarHost.showSnackbar(text)
+                    } else {
+                        heldWhileLocked.add(text)
+                    }
+                }
+            }
+            LaunchedEffect(app.lockState) {
+                if (app.lockState == LockState.Unlocked && heldWhileLocked.isNotEmpty()) {
+                    val held = heldWhileLocked.toList()
+                    heldWhileLocked.clear()
+                    held.forEach { snackbarHost.showSnackbar(it) }
+                } else if (app.lockState == LockState.Locked) {
+                    snackbarHost.currentSnackbarData?.dismiss()
+                }
             }
             Box(Modifier.fillMaxSize()) {
                 when (app.lockState) {
@@ -70,10 +89,12 @@ fun JAScannerRoot(app: AppViewModel) {
                     LockState.Locked -> LockScreen(app)
                     LockState.Unlocked -> Navigation(app)
                 }
-                SnackbarHost(
-                    hostState = snackbarHost,
-                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp),
-                )
+                if (app.lockState == LockState.Unlocked) {
+                    SnackbarHost(
+                        hostState = snackbarHost,
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp),
+                    )
+                }
             }
         }
     }

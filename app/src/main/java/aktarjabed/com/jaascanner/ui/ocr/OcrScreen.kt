@@ -153,7 +153,11 @@ fun OcrScreen(app: AppViewModel, documentId: Long?) {
                         copyToClipboard(context, state.plainText)
                         container.messenger.post("Text copied.")
                     }) { Text("Copy") }
-                    TextButton(onClick = { ShareHelper.shareText(context, state.plainText) }) { Text("Share") }
+                    TextButton(onClick = {
+                        if (!ShareHelper.shareText(context, state.plainText)) {
+                            container.messenger.post("No app can share text on this device.")
+                        }
+                    }) { Text("Share") }
                     TextButton(onClick = {
                         val base = document?.name ?: "Text from picture"
                         saveLauncher.launch(Formatters.safeFileName(base) + ".txt")

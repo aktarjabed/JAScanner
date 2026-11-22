@@ -32,8 +32,13 @@ data class DocumentEntity(
     val updatedAt: Long,
     val favorite: Boolean = false,
     val folderId: Long? = null,
-    /** Text found by OCR, used for library search. */
+    /** Text found by OCR, kept exactly as recognised for display and editing. */
     val ocrText: String = "",
+    /**
+     * [ocrText] after [aktarjabed.com.jaascanner.core.TextSearch.normalize]. SQLite's LIKE only
+     * folds ASCII case, so searches run against this column instead of the original text.
+     */
+    @ColumnInfo(defaultValue = "") val searchText: String = "",
     val source: String = SOURCE_SCAN,
     /** Pinned documents are listed first. */
     @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,

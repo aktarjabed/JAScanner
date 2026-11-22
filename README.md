@@ -26,7 +26,7 @@ All-in-one document scanner and PDF toolkit for Android. Original code, built fr
 | Shrink and protect | Compress, in two modes — **keep text** (re-compresses only the pictures inside the PDF; real text stays real, selectable text) or **smallest** (the original approach: every page becomes a picture) — add password (AES-128), remove password (when you know it), watermark in text or your own picture, stamped once or **repeated across the whole page** |
 | OCR | On-device text recognition (Latin and Devanagari scripts): copy, share, save `.txt`, make a scan searchable in the library, or **save a searchable PDF copy** with the recognised text hidden under each scanned page (selectable and searchable in any PDF reader; pages that already have real text are left alone) |
 | QR and barcodes | Scan any code, create QR codes and share them as pictures |
-| Security | Optional fingerprint / face / screen-lock gate, hide app preview and block screenshots |
+| Security | Optional fingerprint / face / screen-lock gate with a configurable delay (immediately, 30 seconds, 1 or 5 minutes), hide app preview and block screenshots |
 | Comfort | JAScanner's own branded colour scheme by default (light and dark), with an opt-in "Match my wallpaper" switch for Material You, light/dark/system theme, a splash screen, home-screen shortcut "Scan document" |
 
 ## Privacy
@@ -34,6 +34,7 @@ All-in-one document scanner and PDF toolkit for Android. Original code, built fr
 - JAScanner's own manifest declares **no permissions** (no camera, storage or internet). `AndroidManifest.xml` has a comment explaining exactly which permissions are expected to show up in a *Merged Manifest* view anyway (camera, internet) and from which library, so you have something concrete to check it against after your first build (*app > manifests > AndroidManifest.xml > Merged Manifest* in Android Studio) rather than taking this section's word for it. It also explicitly removes the Advertising ID permission (`tools:node="remove"` on `com.google.android.gms.permission.AD_ID`) in case a Play-services-based library tries to merge it in, since JAScanner has no ads or analytics to attribute. The same explanation, in plain language, is in the app itself under Settings > Privacy & permissions.
 - No ads, no accounts, no in-app purchases, and no analytics code of its own.
 - Files stay in the app's private storage until you share or save them. Nothing is uploaded by JAScanner.
+- When App lock is on, Settings > Privacy & permissions has a "Lock after being away for" choice: immediately, 30 seconds, 1 minute or 5 minutes. A PDF shared to JAScanner while it is locked is queued, never imported, and is opened only after you unlock.
 - Scanning and the barcode scanner come from **Google Play services** (on-device modules that Play services may download on first use); text recognition uses ML Kit. Those Google components follow Google's own privacy practices, which this project cannot change. On a phone without Google Play services the scan button will not work; importing and editing PDFs still do.
 
 ## Open it
@@ -43,17 +44,33 @@ All-in-one document scanner and PDF toolkit for Android. Original code, built fr
 3. Run on a device or emulator with Android 12L (API 32) or newer and Google Play services.
 4. Unit tests (plain JVM): `./gradlew :app:testDebugUnitTest`.
 
+### Free Termux build (no Android Studio)
+
+On an aarch64 Android device with Termux, `dev-tools/setup-termux.sh` installs a free toolchain:
+Termux's OpenJDK 21 and native aarch64 `aapt2`, the Android SDK command-line tools, platform 37
+and build-tools 37. It writes `local.properties` and the user-level Gradle setting that replaces
+AGP's x86-64 `aapt2` (which cannot run on an Android host). Everything is installed outside the
+repository (`$PREFIX` and `~/android-sdk`) and the script can be run again safely.
+
+```sh
+bash dev-tools/setup-termux.sh
+cd JAScanner-repo
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+```
+
+The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To install it on the same phone, open that file from **Files → Downloads** (copy it there first if needed). If `termux-open` shows a parsing error, use the Files app instead; some Android builds reject install intents launched from Termux.
+
 ## Honest status
 
-This project was **written but not compiled** in the environment that generated it (the sandbox could not reach Maven or Google's repositories). It was checked with static scripts (bracket balance, package/folder match, import and member resolution across all files, resource references, duplicate declarations) and a read-through, but you should expect a few first-sync fixes: most likely an import, a library version that has moved on, or a small API difference. `PLAN.md` lists the riskiest spots to look at first.
+This project was originally **written but not compiled** in the environment that generated it (the sandbox could not reach Maven or Google's repositories). It has since been compiled on an aarch64 Termux device: `./gradlew :app:testDebugUnitTest` and `./gradlew :app:assembleDebug` both succeed (**99 JVM tests, 0 failures**, debug APK at `app/build/outputs/apk/debug/app-debug.apk`), after fixing a handful of first-sync API mismatches. It has still never been run on a phone; `PLAN.md` section 7 lists the riskiest spots for device testing.
 
 ## Testing status
 
-See `AUDIT.md`: the pure logic (77 unit tests) and the PDF code (on real PDFs, including a 500-page file) were run; the Android parts were not.
+See `AUDIT.md`: the pure logic (99 unit tests in this checkout) and the PDF code (on real PDFs, including a 500-page file) were run; the Android parts were not.
 
-A further multi-agent audit after the source was imported to GitHub filed 26 issues. `FIX_PLAN.md` and [issue #1](https://github.com/aktarjabed/JAScanner/issues/1) are the roadmap for fixing them; the app still needs a first successful Gradle sync and device test.
+A further multi-agent audit after the source was imported to GitHub filed 26 issues. `FIX_PLAN.md` and [issue #1](https://github.com/aktarjabed/JAScanner/issues/1) are the roadmap for fixing them; Gradle sync and debug builds now work on Termux, but a device test is still outstanding.
 
-Round 5 was a dedicated bug and robustness sweep of the whole codebase (not tied to one feature): five parallel reviews, one per area, each looking specifically for resource leaks, off-by-one errors, unhandled exceptions, mutation bugs and coroutine-cancellation bugs, followed by an independent re-check of every fix against the real code. 16 confirmed issues were fixed — crashes on malformed input, a search bug that could freeze the whole Library screen, several storage leaks, stale dialog text, and about a dozen places where leaving a screen mid-action was mistaken for a real error. See `AUDIT.md` section 6 for the full list, including what was checked and found to already be correct. As with every other round, none of this could be compiled or run on a device — the pure-Kotlin fixes got new unit tests, the rest got the static checker and close, independently re-checked reading.
+Round 5 was a dedicated bug and robustness sweep of the whole codebase (not tied to one feature): five parallel reviews, one per area, each looking specifically for resource leaks, off-by-one errors, unhandled exceptions, mutation bugs and coroutine-cancellation bugs, followed by an independent re-check of every fix against the real code. 16 confirmed issues were fixed — crashes on malformed input, a search bug that could freeze the whole Library screen, several storage leaks, stale dialog text, and about a dozen places where leaving a screen mid-action was mistaken for a real error. See `AUDIT.md` section 6 for the full list, including what was checked and found to already be correct. The code now compiles as a whole and the pure-Kotlin fixes are covered by the 99-test JVM suite; the Android-side fixes have still not been exercised on a phone, so they remain independently re-checked reading rather than device-proven.
 
 `COMPARISON.md` sets JAScanner against the public listings of Adobe Acrobat Reader and Document Scanner – PDF Creator, feature by feature, and says where JAScanner is ahead, level, behind or missing.
 

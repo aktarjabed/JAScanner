@@ -4,6 +4,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 
 class FormattersTest {
@@ -38,6 +39,22 @@ class FormattersTest {
     @Test
     fun safeFileNameIsLimitedInLength() {
         assertTrue(Formatters.safeFileName("x".repeat(200)).length <= 80)
+    }
+
+    @Test
+    fun safeFileNameCountsCodePointsAndNeverSplitsAnEmoji() {
+        val name = "a" + "😀".repeat(100)
+        val result = Formatters.safeFileName(name)
+        assertEquals(80, result.codePointCount(0, result.length))
+        assertFalse(result.last().isHighSurrogate())
+        assertTrue(result.endsWith("😀"))
+    }
+
+    @Test
+    fun truncateCodePointsKeepsASupplementaryCharacterWhole() {
+        assertEquals("😀", Formatters.truncateCodePoints("😀", 1))
+        assertEquals("a😀", Formatters.truncateCodePoints("a😀b", 2))
+        assertEquals("", Formatters.truncateCodePoints("😀", 0))
     }
 
     @Test

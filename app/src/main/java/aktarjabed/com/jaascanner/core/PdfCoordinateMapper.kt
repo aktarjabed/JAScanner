@@ -56,7 +56,10 @@ object PdfCoordinateMapper {
         extraAngleDegrees: Float = 0f,
     ): StampPlacement {
         val width = displayedWidth(box, rotation) * widthFraction
-        val height = width / aspect
+        // A malformed bitmap can report zero (or a NaN) aspect; dividing by it would make the
+        // stamp's height infinite and corrupt the PDF content stream. A square is a safe stand-in.
+        val safeAspect = if (aspect.isFinite() && aspect > 0f) aspect else 1f
+        val height = width / safeAspect
         val center = point(box, rotation, centerU, centerV)
         return StampPlacement(
             centerX = center.x,

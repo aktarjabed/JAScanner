@@ -22,10 +22,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id IN (:ids)")
     suspend fun getMany(ids: List<Long>): List<DocumentEntity>
 
-    // ESCAPE lets the caller search for a literal %, _ or \ by escaping it first (see
-    // DocumentRepository.idsMatchingText) instead of those characters being treated as SQL
-    // LIKE wildcards.
-    @Query("SELECT id FROM documents WHERE ocrText LIKE '%' || :query || '%' ESCAPE '\\'")
+    // searchText is ocrText normalised with NFKC + lower-case, because SQLite's LIKE only folds
+    // ASCII case. ESCAPE lets the caller search for a literal %, _ or \ by escaping it first (see
+    // DocumentRepository.idsMatchingText) instead of those characters being SQL LIKE wildcards.
+    @Query("SELECT id FROM documents WHERE searchText LIKE '%' || :query || '%' ESCAPE '\\'")
     suspend fun idsMatchingText(query: String): List<Long>
 
     @Insert
@@ -40,8 +40,8 @@ interface DocumentDao {
     @Query("UPDATE documents SET folderId = :folderId WHERE id IN (:ids)")
     suspend fun moveToFolder(ids: List<Long>, folderId: Long?)
 
-    @Query("UPDATE documents SET ocrText = :text WHERE id = :id")
-    suspend fun setOcrText(id: Long, text: String)
+    @Query("UPDATE documents SET ocrText = :text, searchText = :searchText WHERE id = :id")
+    suspend fun setOcrText(id: Long, text: String, searchText: String)
 
     @Query("UPDATE documents SET favorite = :favorite WHERE id = :id")
     suspend fun setFavorite(id: Long, favorite: Boolean)

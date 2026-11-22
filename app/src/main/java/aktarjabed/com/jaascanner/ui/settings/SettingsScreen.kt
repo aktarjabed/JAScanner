@@ -1,6 +1,5 @@
 package aktarjabed.com.jaascanner.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -10,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -32,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
@@ -42,12 +45,15 @@ import aktarjabed.com.jaascanner.container
 import aktarjabed.com.jaascanner.core.Formatters
 import aktarjabed.com.jaascanner.core.findActivity
 import aktarjabed.com.jaascanner.data.AppSettings
+import aktarjabed.com.jaascanner.data.LockGrace
 import aktarjabed.com.jaascanner.data.OcrLanguage
 import aktarjabed.com.jaascanner.data.ScanMode
 import aktarjabed.com.jaascanner.data.ThemeMode
 import aktarjabed.com.jaascanner.data.db.FolderEntity
+import aktarjabed.com.jaascanner.pdf.toUserMessage
 import aktarjabed.com.jaascanner.security.AppLock
 import aktarjabed.com.jaascanner.ui.containerViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -85,17 +91,28 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setAppLock(value: Boolean) = launchSet { container.settings.setAppLock(value) }
 
+    fun setLockGrace(value: LockGrace) = launchSet { container.settings.setLockGrace(value) }
+
     fun setBlockScreenshots(value: Boolean) = launchSet { container.settings.setBlockScreenshots(value) }
 
     fun setCompressQuality(value: Int) = launchSet { container.settings.setCompressQuality(value) }
 
-    fun forgetEditorMemory() {
-        launchSet { container.settings.clearEditorMemory() }
+    fun forgetEditorMemory() = launchSet {
+        container.settings.clearEditorMemory()
         container.messenger.post("Editor memory cleared.")
     }
 
+    /** Writes are awaited so the success message is only posted after DataStore has committed. */
     private fun launchSet(block: suspend () -> Unit) {
-        viewModelScope.launch { block() }
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                container.messenger.post("Could not save that setting: ${error.toUserMessage()}")
+            }
+        }
     }
 }
 
@@ -189,7 +206,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             Text(
                 "What this app can see",
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
             )
             PermissionRow(
                 title = "Camera",
@@ -221,7 +238,7 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             RowDivider()
             SwitchRow(
                 title = "App lock",
-                subtitle = "Ask for fingerprint, face or screen lock when opening JAScanner",
+                subtitle = "Ask for fingerprint, face or screen lock when opening JAScanner, or after the delay below",
                 checked = settings.appLock,
                 onChange = { enable ->
                     if (!enable) {
@@ -242,6 +259,27 @@ fun SettingsContent(modifier: Modifier = Modifier) {
                     }
                 },
             )
+            if (settings.appLock) {
+                RowDivider()
+                Text(
+                    "Lock after being away for",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                )
+                Text(
+                    "Immediately locks as soon as you leave JAScanner; a delay keeps it open for quick returns.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                )
+                LockGrace.entries.forEach { grace ->
+                    RadioRow(
+                        label = grace.label,
+                        selected = settings.lockGrace == grace,
+                        onSelect = { vm.setLockGrace(grace) },
+                    )
+                }
+            }
             SwitchRow(
                 title = "Hide in recent apps and screenshots",
                 subtitle = "Blocks screenshots and blanks the app preview",
@@ -318,7 +356,7 @@ private fun RowDivider() {
 /** One line of the "what this app can see" permissions disclosure: an icon, a title and plain-language detail. */
 @Composable
 private fun PermissionRow(title: String, detail: String, isLast: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, top = 6.dp, bottom = if (isLast) 10.dp else 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = if (isLast) 10.dp else 6.dp)) {
         Icon(
             Icons.Filled.CheckCircle,
             contentDescription = null,
@@ -339,7 +377,11 @@ private fun versionName(context: android.content.Context): String =
 @Composable
 private fun RadioRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onSelect).padding(horizontal = 16.dp, vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .semantics { stateDescription = if (selected) "Selected" else "Not selected" }
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, onClick = null)
@@ -350,7 +392,11 @@ private fun RadioRow(label: String, selected: Boolean, onSelect: () -> Unit) {
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .semantics { stateDescription = if (checked) "On" else "Off" }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {

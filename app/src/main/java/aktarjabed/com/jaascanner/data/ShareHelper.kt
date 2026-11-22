@@ -1,5 +1,6 @@
 package aktarjabed.com.jaascanner.data
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -50,12 +51,42 @@ object ShareHelper {
         context.startActivity(Intent.createChooser(send, "Share images").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    fun shareText(context: Context, text: String) {
+    /** Returns false when the device has no app that can receive plain text. */
+    fun shareText(context: Context, text: String): Boolean {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
         }
-        context.startActivity(Intent.createChooser(send, "Share text").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return try {
+            context.startActivity(Intent.createChooser(send, "Share text").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (error: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    /** Shares any number of PDFs in one chooser; a single document uses the normal single-share path. */
+    suspend fun sharePdfs(context: Context, documents: List<Pair<File, String>>) {
+        if (documents.isEmpty()) return
+        if (documents.size == 1) {
+            sharePdf(context, documents.first().first, documents.first().second)
+            return
+        }
+        val uris = withContext(Dispatchers.IO) {
+            documents.mapIndexed { index, (file, name) ->
+                // An index keeps two documents with the same display name from overwriting
+                // each other's staged copy in the shared cache directory.
+                val target = File(shareDir(context), Formatters.safeFileName(name) + "-$index.pdf")
+                file.copyTo(target, overwrite = true)
+                uriFor(context, target)
+            }
+        }
+        val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "application/pdf"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "Share PDFs").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     suspend fun sharePng(context: Context, source: File, displayName: String) {

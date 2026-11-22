@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The launcher icon's brand tile. Kept blue so the icon still reads as JAScanner. -->
     <color name="ic_launcher_background">#FF1565C0</color>
-    <color name="splash_background">#FF1565C0</color>
+    <!-- Matches the light theme's surface (#FBFCFF) so the splash does not flash a different colour. -->
+    <color name="splash_background">#FFFBFCFF</color>
+    <!-- The icon's own tile is the brand colour, not the splash background. -->
+    <color name="splash_icon_background">#FF1565C0</color>
 </resources>

@@ -20,6 +20,27 @@ data class GlyphSample(
     val fontName: String,
 )
 
+/**
+ * One word of real (selectable) text on a page.
+ * Boxes are fractions of the page as displayed: u to the right, v downwards.
+ * Only text that is upright on the displayed page becomes a [TextWord].
+ */
+data class TextWord(
+    val text: String,
+    val page: Int,
+    val u0: Float,
+    val v0: Float,
+    val u1: Float,
+    val v1: Float,
+    val baselineV: Float,
+    /** Font size as a fraction of the displayed page width. */
+    val fontSizeFrac: Float,
+    val fontName: String,
+    /** Where the word starts and ends inside [PageText.flat]. */
+    val flatStart: Int,
+    val flatEnd: Int,
+)
+
 /** All text of one page in content-stream order. [flat] is every glyph's text joined together. */
 class PageText(val words: List<TextWord>, val flat: String)
 

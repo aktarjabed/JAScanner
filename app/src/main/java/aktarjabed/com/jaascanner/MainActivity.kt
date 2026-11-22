@@ -1,5 +1,7 @@
 package aktarjabed.com.jaascanner
 
+import android.content.ClipData
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -69,13 +71,51 @@ class MainActivity : FragmentActivity() {
 
     private fun handleIntent(intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_VIEW -> intent.data?.let(appViewModel::openExternalPdf)
+            Intent.ACTION_VIEW -> {
+                val uri = intent.data
+                if (uri != null) handlePdfUris(intent, listOf(uri)) else badIntent()
+            }
             Intent.ACTION_SEND -> {
                 val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                if (uri != null) appViewModel.openExternalPdf(uri)
+                handlePdfUris(intent, listOfNotNull(uri))
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uris = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+                handlePdfUris(intent, uris)
             }
             ACTION_SCAN -> appViewModel.requestScan()
         }
+    }
+
+    /**
+     * Collects PDFs from EXTRA_STREAM and, when a sender only fills ClipData, from there too.
+     * Only content: URIs are accepted: a file: path from another app carries no grant we can rely
+     * on, and the manifest no longer advertises it. The PDF header is checked again while copying.
+     */
+    private fun handlePdfUris(intent: Intent, extras: List<Uri>) {
+        val clip: ClipData? = intent.clipData
+        val fromClip = if (clip == null) {
+            emptyList()
+        } else {
+            (0 until clip.itemCount).mapNotNull { index ->
+                val uri = clip.getItemAt(index)?.uri
+                val mime = try { clip.description.getMimeType(index) } catch (error: Exception) { null }
+                if (uri != null && isPdfUri(uri, mime)) uri else null
+            }
+        }
+        val pdfs = (extras.filter { isPdfUri(it, intent.type) } + fromClip).distinct()
+        if (pdfs.isEmpty()) {
+            badIntent()
+        } else {
+            appViewModel.openExternalPdfs(pdfs)
+        }
+    }
+
+    private fun isPdfUri(uri: Uri, mime: String?): Boolean =
+        uri.scheme == ContentResolver.SCHEME_CONTENT && (mime == null || mime == "*/*" || mime == "application/pdf")
+
+    private fun badIntent() {
+        (application as JAScannerApp).container.messenger.post("That app did not send a readable PDF.")
     }
 
     companion object {

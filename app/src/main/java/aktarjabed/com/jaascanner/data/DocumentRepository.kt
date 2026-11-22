@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.room.withTransaction
+import aktarjabed.com.jaascanner.core.FolderNames
 import aktarjabed.com.jaascanner.core.Formatters
+import aktarjabed.com.jaascanner.core.TextSearch
 import aktarjabed.com.jaascanner.data.db.AppDatabase
 import aktarjabed.com.jaascanner.data.db.DocumentDao
 import aktarjabed.com.jaascanner.data.db.DocumentEntity
@@ -20,6 +22,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+
+/** Upper bound for a single imported/shared PDF, so a hostile or broken provider cannot fill the phone. */
+private const val MAX_IMPORT_BYTES = 200L * 1024 * 1024
 
 /** Owns the document files (filesDir/documents) and their database rows. */
 class DocumentRepository(
@@ -52,7 +57,9 @@ class DocumentRepository(
      *  that character, not use it as a SQL LIKE wildcard, so both are escaped before the query
      *  (backslash first, so an escaped character is never re-escaped). */
     suspend fun idsMatchingText(query: String): List<Long> {
-        val escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        val normalised = TextSearch.normalize(query.trim())
+        if (normalised.isEmpty()) return emptyList()
+        val escaped = normalised.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         return documentDao.idsMatchingText(escaped)
     }
 
@@ -61,14 +68,33 @@ class DocumentRepository(
         withContext(Dispatchers.IO) {
             val target = newOutputFile()
             try {
+                // Refuse a known-huge file before copying it at all. Providers that do not report
+                // a size are still bounded by the streaming cap below.
+                val reported = querySize(uri)
+                if (reported != null && reported > MAX_IMPORT_BYTES) throw ImportTooLargeException()
                 val input = context.contentResolver.openInputStream(uri) ?: return@withContext null
-                input.use { stream -> target.outputStream().use { stream.copyTo(it) } }
-                if (!looksLikePdf(target)) {
+                var total = 0L
+                input.use { stream ->
+                    target.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val read = stream.read(buffer)
+                            if (read < 0) break
+                            total += read
+                            if (total > MAX_IMPORT_BYTES) throw ImportTooLargeException()
+                            out.write(buffer, 0, read)
+                        }
+                    }
+                }
+                if (total == 0L || !looksLikePdf(target)) {
                     target.delete()
                     return@withContext null
                 }
                 val displayName = name ?: queryDisplayName(uri) ?: Formatters.defaultScanName(System.currentTimeMillis())
                 registerOutput(target, Formatters.stripPdfExtension(displayName), source, folderId)
+            } catch (error: ImportTooLargeException) {
+                target.delete()
+                throw error
             } catch (error: CancellationException) {
                 target.delete()
                 throw error
@@ -77,6 +103,18 @@ class DocumentRepository(
                 null
             }
         }
+
+    /** Size reported by the provider, or null when it does not expose one. */
+    private fun querySize(uri: Uri): Long? = try {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (index >= 0 && cursor.moveToFirst() && !cursor.isNull(index)) cursor.getLong(index) else null
+        }
+    } catch (error: Exception) {
+        null
+    }
+
+    class ImportTooLargeException : Exception("The file is larger than the ${MAX_IMPORT_BYTES / (1024 * 1024)} MB import limit.")
 
     /** Registers a PDF that already sits in the documents folder. */
     suspend fun registerOutput(
@@ -179,7 +217,8 @@ class DocumentRepository(
         ids.forEach { documentDao.setPinned(it, pinned) }
     }
 
-    suspend fun setOcrText(id: Long, text: String) = documentDao.setOcrText(id, text)
+    suspend fun setOcrText(id: Long, text: String) =
+        documentDao.setOcrText(id, text, TextSearch.normalize(text))
 
     suspend fun moveToFolder(ids: List<Long>, folderId: Long?) {
         if (ids.isNotEmpty()) documentDao.moveToFolder(ids, folderId)
@@ -197,16 +236,17 @@ class DocumentRepository(
     }
 
     suspend fun createFolder(name: String, parentId: Long? = null): Long? {
-        val clean = name.trim()
-        if (clean.isEmpty()) return null
+        val clean = FolderNames.clean(name) ?: return null
         return folderDao.insert(FolderEntity(name = clean, parentId = parentId))
     }
 
     suspend fun folderExists(id: Long): Boolean = folderDao.countWithId(id) > 0
 
-    suspend fun renameFolder(id: Long, name: String) {
-        val clean = name.trim()
-        if (clean.isNotEmpty()) folderDao.rename(id, clean)
+    /** Returns false when the name has no visible content, so the caller can tell the user. */
+    suspend fun renameFolder(id: Long, name: String): Boolean {
+        val clean = FolderNames.clean(name) ?: return false
+        folderDao.rename(id, clean)
+        return true
     }
 
     suspend fun deleteFolder(id: Long) {

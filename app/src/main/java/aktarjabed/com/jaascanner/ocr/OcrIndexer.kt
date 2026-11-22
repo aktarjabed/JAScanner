@@ -3,6 +3,7 @@ package aktarjabed.com.jaascanner.ocr
 import aktarjabed.com.jaascanner.core.Messenger
 import aktarjabed.com.jaascanner.data.DocumentRepository
 import aktarjabed.com.jaascanner.data.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -25,6 +26,8 @@ class OcrIndexer(
         val language = settings.settings.first().ocrLanguage
         val texts = try {
             engine.recognizePdf(repository.fileOf(document), language, MAX_PAGES)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             if (announce) messenger.post("Text recognition failed on this device.")
             return false

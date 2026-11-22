@@ -248,7 +248,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun renameFolder(id: Long, name: String) {
-        viewModelScope.launch { documents.renameFolder(id, name) }
+        viewModelScope.launch {
+            if (!documents.renameFolder(id, name)) {
+                container.messenger.post("Enter a folder name.")
+            }
+        }
     }
 
     fun deleteFolder(id: Long) {

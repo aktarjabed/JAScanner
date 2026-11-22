@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -287,6 +288,14 @@ private fun PageCell(
             val turn = Matrix()
             turn.postRotate(entry.rotation.toFloat())
             Bitmap.createBitmap(base, 0, 0, base.width, base.height, turn, true)
+        }
+    }
+    // The unrotated bitmap belongs to PdfPageSource's cache and must stay alive. The rotated
+    // copy is ours and can be several megabytes; release it as soon as this cell is recycled.
+    DisposableEffect(bitmap, entry.rotation) {
+        val displayed = bitmap
+        onDispose {
+            if (entry.rotation != 0 && displayed != null && !displayed.isRecycled) displayed.recycle()
         }
     }
     val heightOverWidth = source.heightOverWidth(entry.source)

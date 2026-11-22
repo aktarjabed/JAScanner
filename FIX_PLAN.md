@@ -2,15 +2,15 @@
 
 Source of truth: [issue #1 — audit master tracker](https://github.com/aktarjabed/JAScanner/issues/1).
 This document turns the 25 filed findings into an ordered, testable programme of work.
-It supersedes the "Plan v2" ordering in `NEXT_PLAN.md` for the next few releases: nothing new is built until the app compiles and the high-severity defects are closed.
+It supersedes the "Plan v2" ordering in `NEXT_PLAN.md` for the next few releases: nothing new is built until the app compiles, the high-severity defects are closed and the result has had a first device test.
 
 ## Current state
 
 - Source imported from the delivered ZIP in commit `bc5190e`; 142 tracked files.
-- No Android build has ever succeeded. No APK exists. No device testing has happened.
-- Phase 1 fixes for #5-#15 and #26 are implemented in source, but every issue stays open until Gradle sync, JVM tests, lint and device checks pass on a proper toolchain.
-- Phase 2 Batch A fixes for #16-#18 (dialogs/viewer, library states, tool validation and cleanup) are implemented in source and statically reviewed; they also stay open until the same verification ladder is completed.
-- The desktop harness tests pure Kotlin logic only; it currently hides compiler errors (issue #4).
+- The Android build now succeeds on an aarch64 Termux device: `./gradlew :app:testDebugUnitTest` runs **99 tests with 0 failures**, and `./gradlew :app:assembleDebug` produces `app/build/outputs/apk/debug/app-debug.apk`. No device testing has happened yet.
+- Phase 1 fixes for #5-#15 and #26 are implemented in source and compile; every issue stays open until the device checks in `PLAN.md` section 7 pass.
+- Phase 2 fixes for #16-#22 (dialogs/viewer, library states, tool validation and cleanup, external intents, settings, sharing, accessibility) and Phase 3 fixes for #4 and #23-#25 are implemented in source and compile; they also stay open until the same verification ladder is completed.
+- The desktop harness now fails on compiler errors (issue #4 fixed), is parameterised, ships a standard-library fixture generator, and reproduces all 99 JVM tests.
 
 ## Verification ladder (every fix climbs as far as it can)
 
@@ -22,15 +22,15 @@ It supersedes the "Plan v2" ordering in `NEXT_PLAN.md` for the next few releases
 
 ## Phases
 
-### Phase 0 — Make it build (milestone 1)
+### Phase 0 — Make it build (milestone 1) — done
 
 | Issue | Work | Exit criterion |
 |---|---|---|
-| #2 | `compileSdk` 36 -> 37 for Compose 1.12; align README/PLAN | A clean Gradle sync succeeds |
-| #3 | Ship the wrapper or fix the documented test command | `:app:testDebugUnitTest` runs from a fresh clone |
+| #2 `[done]` | `compileSdk` 36 -> 37 for Compose 1.12; align README/PLAN | A clean Gradle sync succeeds |
+| #3 `[done]` | Ship the wrapper or fix the documented test command | `:app:testDebugUnitTest` runs from a fresh clone |
 | #1 | Keep the tracker checklist current | All Phase 0 boxes checked |
 
-This phase blocks everything else. If a library version has drifted, bump it in `gradle/libs.versions.toml`, not in scattered files.
+This phase blocked everything else and is now complete on Termux. If a library version has drifted, bump it in `gradle/libs.versions.toml`, not in scattered files.
 
 ### Phase 1 — Correctness and security (milestone 2)
 
@@ -59,10 +59,10 @@ Exit criterion: the device smoke plan in `PLAN.md` section 7 passes end to end, 
 
 | Issue | Work |
 |---|---|
-| #4 | Make the harness fail on compiler errors; align toolchain versions; ship fixtures |
-| #23 | Unicode/numeric edge cases (surrogate-safe truncation, sampling, guards) |
-| #24 | Correct doc drift: stale PLAN appendix, "form filling out of scope", round-5 overclaims |
-| #25 | Fill test gaps: rotated boxes, races, dialogs, output cleanup |
+| #4 `[done]` | Make the harness fail on compiler errors; align toolchain versions; ship fixtures |
+| #23 `[done]` | Unicode/numeric edge cases (surrogate-safe truncation, sampling, guards) |
+| #24 `[done]` | Correct doc drift: stale PLAN appendix, "form filling out of scope", round-5 overclaims |
+| #25 `[done]` | Fill test gaps: rotated boxes, races, dialogs, output cleanup |
 
 Exit criterion: no doc statement is contradicted by source; every high/medium issue has a regression test or a device test step.
 

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- A deeper navy in dark mode so the splash screen doesn't flash a bright blue. -->
-    <color name="splash_background">#FF0B3A66</color>
+    <!-- Matches the dark theme's surface (#121316) so the splash does not flash a bright colour. -->
+    <color name="splash_background">#FF121316</color>
+    <!-- The icon keeps the same brand-blue tile in dark mode. -->
+    <color name="splash_icon_background">#FF1565C0</color>
 </resources>

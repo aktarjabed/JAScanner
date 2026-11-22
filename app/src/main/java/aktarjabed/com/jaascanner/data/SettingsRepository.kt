@@ -37,6 +37,14 @@ enum class SortOrder(val label: String) {
     Size("Largest first"),
 }
 
+/** How long the app may stay in the background before the lock kicks in on return. */
+enum class LockGrace(val label: String, val milliseconds: Long) {
+    Immediately("Immediately", 0L),
+    Seconds30("After 30 seconds", 30_000L),
+    Minute1("After 1 minute", 60_000L),
+    Minutes5("After 5 minutes", 300_000L),
+}
+
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.System,
     /** False (the default) uses JAScanner's own colours; true matches the phone's wallpaper (Material You). */
@@ -46,6 +54,7 @@ data class AppSettings(
     val autoOcr: Boolean = true,
     val ocrLanguage: OcrLanguage = OcrLanguage.Latin,
     val appLock: Boolean = false,
+    val lockGrace: LockGrace = LockGrace.Seconds30,
     val blockScreenshots: Boolean = false,
     val sortOrder: SortOrder = SortOrder.Newest,
     val gridView: Boolean = true,
@@ -64,6 +73,16 @@ data class EditorMemory(
     val recentTexts: List<String> = emptyList(),
 )
 
+/** One remembered editor value, so Settings can forget a single value without the rest. */
+enum class EditorMemoryField {
+    PenColor,
+    HighlightColor,
+    PenWidth,
+    TextScale,
+    TextFace,
+    RecentTexts,
+}
+
 private const val RECENT_SEPARATOR = '\u001F'
 
 private inline fun <reified T : Enum<T>> String?.toEnumOr(default: T): T =
@@ -79,6 +98,7 @@ class SettingsRepository(private val context: Context) {
         val AUTO_OCR = booleanPreferencesKey("auto_ocr")
         val OCR_LANGUAGE = stringPreferencesKey("ocr_language")
         val APP_LOCK = booleanPreferencesKey("app_lock")
+        val LOCK_GRACE = stringPreferencesKey("lock_grace")
         val BLOCK_SCREENSHOTS = booleanPreferencesKey("block_screenshots")
         val SORT = stringPreferencesKey("sort_order")
         val GRID = booleanPreferencesKey("grid_view")
@@ -108,14 +128,34 @@ class SettingsRepository(private val context: Context) {
             )
         }
 
-    suspend fun saveEditorMemory(memory: EditorMemory) = edit { prefs ->
-        memory.penColor?.let { prefs[Keys.ED_PEN_COLOR] = it }
-        memory.highlightColor?.let { prefs[Keys.ED_HIGHLIGHT_COLOR] = it }
-        memory.penWidth?.let { prefs[Keys.ED_PEN_WIDTH] = it }
-        memory.textScale?.let { prefs[Keys.ED_TEXT_SCALE] = it }
-        memory.textFace?.let { prefs[Keys.ED_TEXT_FACE] = it }
-        prefs[Keys.ED_RECENT] = memory.recentTexts.joinToString(RECENT_SEPARATOR.toString())
+    /**
+     * Saves the remembered editor values. Fields in [clear] are removed instead of written, so a
+     * caller can forget one value (for example the recently typed text) while keeping the rest.
+     * A null value alone still means "leave the stored value alone", because the editor saves
+     * partial snapshots as the user changes one control at a time.
+     */
+    suspend fun saveEditorMemory(memory: EditorMemory, clear: Set<EditorMemoryField> = emptySet()) = edit { prefs ->
+        if (EditorMemoryField.PenColor in clear) prefs.remove(Keys.ED_PEN_COLOR)
+        else memory.penColor?.let { prefs[Keys.ED_PEN_COLOR] = it }
+
+        if (EditorMemoryField.HighlightColor in clear) prefs.remove(Keys.ED_HIGHLIGHT_COLOR)
+        else memory.highlightColor?.let { prefs[Keys.ED_HIGHLIGHT_COLOR] = it }
+
+        if (EditorMemoryField.PenWidth in clear) prefs.remove(Keys.ED_PEN_WIDTH)
+        else memory.penWidth?.let { prefs[Keys.ED_PEN_WIDTH] = it }
+
+        if (EditorMemoryField.TextScale in clear) prefs.remove(Keys.ED_TEXT_SCALE)
+        else memory.textScale?.let { prefs[Keys.ED_TEXT_SCALE] = it }
+
+        if (EditorMemoryField.TextFace in clear) prefs.remove(Keys.ED_TEXT_FACE)
+        else memory.textFace?.let { prefs[Keys.ED_TEXT_FACE] = it }
+
+        if (EditorMemoryField.RecentTexts in clear) prefs.remove(Keys.ED_RECENT)
+        else prefs[Keys.ED_RECENT] = memory.recentTexts.joinToString(RECENT_SEPARATOR.toString())
     }
+
+    /** Forgets one remembered editor value, leaving the others alone. */
+    suspend fun clearEditorMemory(field: EditorMemoryField) = saveEditorMemory(EditorMemory(), clear = setOf(field))
 
     /** Forgets what the editor remembered (colours, widths, typeface, recent text). */
     suspend fun clearEditorMemory() = edit { prefs ->
@@ -142,6 +182,7 @@ class SettingsRepository(private val context: Context) {
                 autoOcr = prefs[Keys.AUTO_OCR] ?: d.autoOcr,
                 ocrLanguage = prefs[Keys.OCR_LANGUAGE].toEnumOr(d.ocrLanguage),
                 appLock = prefs[Keys.APP_LOCK] ?: d.appLock,
+                lockGrace = prefs[Keys.LOCK_GRACE].toEnumOr(d.lockGrace),
                 blockScreenshots = prefs[Keys.BLOCK_SCREENSHOTS] ?: d.blockScreenshots,
                 sortOrder = prefs[Keys.SORT].toEnumOr(d.sortOrder),
                 gridView = prefs[Keys.GRID] ?: d.gridView,
@@ -163,6 +204,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOcrLanguage(value: OcrLanguage) = edit { it[Keys.OCR_LANGUAGE] = value.name }
 
     suspend fun setAppLock(value: Boolean) = edit { it[Keys.APP_LOCK] = value }
+
+    suspend fun setLockGrace(value: LockGrace) = edit { it[Keys.LOCK_GRACE] = value.name }
 
     suspend fun setBlockScreenshots(value: Boolean) = edit { it[Keys.BLOCK_SCREENSHOTS] = value }
 
