@@ -9,7 +9,7 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 | Area | Adobe Acrobat Reader | Document Scanner (com.cv.docscanner) | JAScanner |
 |---|---|---|---|
 | Price | Merge/organise, compress, password, export and OCR need a subscription | Contains ads and in-app purchases; premium filters | Everything free, no ads, no account |
-| Privacy | Account and cloud centred | Listing says data may be shared and cannot be deleted | Files stay on the phone; own manifest declares no permissions (verify the Merged Manifest) |
+| Privacy | Account and cloud centred | Listing says data may be shared and cannot be deleted | Files stay on the phone; one runtime permission of its own (Camera, only for the built-in fallback), no storage or internet permission (verify the Merged Manifest) |
 | Scan + PDF tools in one app | Reader only (scans come from a separate Adobe Scan app) | Scanner with basic PDF tools | One library for both |
 | Search inside scans | OCR is paid | OCR listed as "upcoming" | On-device OCR feeds library search |
 | Editing marks | Free tier: comments, highlight, fill and sign | Not listed | Pen widths, box highlight, line, arrow, rectangle, ellipse, white-out, text, signature, pictures, select/move/resize/delete marks, undo/redo |
@@ -23,7 +23,7 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 - Reading mode now reflows text and reads it aloud (see above), narrowing but not closing the gap with Adobe's Liquid Mode, which also reflows images and tables. AI assistant, PDF Spaces, Adobe Express, cloud accounts: not implemented.
 - Word / Excel / PowerPoint conversion, web page to PDF, fax: not implemented.
 - Maturity: both apps are proven at scale. JAScanner compiles and its JVM tests pass, but it has never been run on a phone.
-- Scan quality is Google's scanner, not ours.
+- Scan quality is Google's scanner, not ours. The built-in fallback camera (for phones without the Play services scanner) takes an ordinary photo and applies the Enhanced filter; it does not do edge detection or perspective correction.
 
 ## 3. Editing: what is implemented and what is not
 
@@ -45,7 +45,7 @@ Not implemented:
 ## 4. Plan v2 (in order)
 
 ### Phase 0: make it real (blocks everything)
-- ~~Compile it and run the unit tests.~~ `[done]` — `./gradlew :app:testDebugUnitTest` (112 tests) and `:app:assembleDebug` succeed on Termux.
+- ~~Compile it and run the unit tests.~~ `[done]` — `./gradlew :app:testDebugUnitTest` (116 tests) and `:app:assembleDebug` succeed on Termux.
 - Run on a real phone: scan, import, every tool once, form fill, app lock. Check the Merged Manifest for added permissions.
 - Test the database migrations (1→2 and 2→3) on a phone that had an earlier build.
 - Exit: debug build installs and the test plan in PLAN.md section 7 passes.

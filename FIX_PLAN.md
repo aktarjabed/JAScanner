@@ -7,10 +7,10 @@ It supersedes the "Plan v2" ordering in `NEXT_PLAN.md` for the next few releases
 ## Current state
 
 - Source imported from the delivered ZIP in commit `bc5190e`; 142 tracked files.
-- The Android build now succeeds on an aarch64 Termux device: `./gradlew :app:testDebugUnitTest` runs **112 tests with 0 failures**, and `./gradlew :app:assembleDebug` produces `app/build/outputs/apk/debug/app-debug.apk`. No device testing has happened yet.
+- The Android build now succeeds on an aarch64 Termux device: `./gradlew :app:testDebugUnitTest` runs **116 tests with 0 failures**, and `./gradlew :app:assembleDebug` produces `app/build/outputs/apk/debug/app-debug.apk`. No device testing has happened yet.
 - Phase 1 fixes for #5-#15 and #26 are implemented in source and compile; every issue stays open until the device checks in `PLAN.md` section 7 pass.
 - Phase 2 fixes for #16-#22 (dialogs/viewer, library states, tool validation and cleanup, external intents, settings, sharing, accessibility) and Phase 3 fixes for #4 and #23-#25 are implemented in source and compile; they also stay open until the same verification ladder is completed.
-- The desktop harness now fails on compiler errors (issue #4 fixed), is parameterised, ships a standard-library fixture generator, and reproduces all 112 JVM tests.
+- The desktop harness now fails on compiler errors (issue #4 fixed), is parameterised, ships a standard-library fixture generator, and reproduces all 116 JVM tests.
 
 ## Verification ladder (every fix climbs as far as it can)
 

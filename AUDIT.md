@@ -1,6 +1,6 @@
 # JAScanner audit (rounds 1 through 5)
 
-Scope: bugs, robustness, error handling, UI and top bars against market apps. Compiled with Gradle on Termux and run as far as possible without an emulator or phone. Anything not covered below has NOT been tested. **Current status: `./gradlew :app:testDebugUnitTest` passes 112 tests with 0 failures, and `./gradlew :app:assembleDebug` produces a debug APK; the app has still never been run on a phone.**
+Scope: bugs, robustness, error handling, UI and top bars against market apps. Compiled with Gradle on Termux and run as far as possible without an emulator or phone. Anything not covered below has NOT been tested. **Current status: `./gradlew :app:testDebugUnitTest` passes 116 tests with 0 failures, and `./gradlew :app:assembleDebug` produces a debug APK; the app has still never been run on a phone.**
 
 Round 3 (31 Oct 2026) added the features `NEXT_PLAN.md` and `COMPARISON.md` had flagged as most important: an embedded OCR text layer, bookmarks and comments stored in the PDF, compress that keeps text, a page-thumbnail grid with drag reorder/rotate/delete/duplicate, an image/tiled watermark, reading mode with read-aloud, and three more filters. See section 0 below for what was run this round; sections 1-5 are unchanged from round 2.
 
@@ -8,13 +8,13 @@ Round 4 (1 Nov 2026) was a UI-design and permissions pass: a branded Material 3 
 
 Round 5 (13 Nov 2026) was a dedicated bug/robustness/error-handling sweep across the whole app: every file under `core/`, `pdf/`, `data/` (including the Room layer), `ocr/`, `scan/`, `security/` and all of `ui/` was read with that one question in mind, by five separate reviews run in parallel, each scoped to one area of the codebase. Section 6 below lists every confirmed issue and its fix. A second, independent pass then re-read every changed line (without having written any of it) specifically looking for a fix that was wrong, incomplete, or introduced a new problem; it confirmed all of them.
 
-At the time it was written, round 5 could not be compiled: the fixes were checked by the static checker (98 files, 1,896 declarations, all resolve), the desktop unit-test harness (77 tests then; the current suite has **112, all passing**), and close reading for everything in `pdf/`, `data/` and `ui/` that the harness cannot touch (PDFBox-Android, Room, Compose, coroutine lifecycle). The project has since been compiled with Android Gradle on Termux — `:app:testDebugUnitTest` and `:app:assembleDebug` both succeed — so the Kotlin now compiles as a whole. That still does not prove the Android-side fixes at runtime: none of this has been run on a phone. Treat every fix outside `core/` as logically reasoned through, compiled and independently re-checked, not as proven by execution on a device.
+At the time it was written, round 5 could not be compiled: the fixes were checked by the static checker (98 files, 1,896 declarations, all resolve), the desktop unit-test harness (77 tests then; the current suite has **116, all passing**), and close reading for everything in `pdf/`, `data/` and `ui/` that the harness cannot touch (PDFBox-Android, Room, Compose, coroutine lifecycle). The project has since been compiled with Android Gradle on Termux — `:app:testDebugUnitTest` and `:app:assembleDebug` both succeed — so the Kotlin now compiles as a whole. That still does not prove the Android-side fixes at runtime: none of this has been run on a phone. Treat every fix outside `core/` as logically reasoned through, compiled and independently re-checked, not as proven by execution on a device.
 
 ## 0. Round 3: what was actually run
 
 | Check | How | Result |
 |---|---|---|
-| Unit tests (now including `PageList` and the reading-mode text/pixel helpers) | Same plain-Kotlin + JUnit setup as section 1, extended with 24 new tests | 72 of 72 at the time; the current checkout runs 112 of 112 (see `dev-tools/desktop-harness/round3/`) |
+| Unit tests (now including `PageList` and the reading-mode text/pixel helpers) | Same plain-Kotlin + JUnit setup as section 1, extended with 24 new tests | 72 of 72 at the time; the current checkout runs 116 of 116 (see `dev-tools/desktop-harness/round3/`) |
 | OCR text layer (`PdfTextLayer`) on real PDFs | Desktop PDFBox, driven by `TextLayerTest`/`PdfFeatures` drivers | Invisible (pages render identically to the untouched scan), positioned correctly on upright and 90/180/270-rotated pages, handles accented and unencodable (₹) text, blank lines, zero-size boxes and an out-of-range page without crashing |
 | Compress-keeps-text (`PdfImageCompress`) on real PDFs | A desktop stand-in for the Android `BitmapImageRecoder` (same shrink-then-JPEG logic, `java.awt` instead of `android.graphics`) | Shrinks a picture-heavy PDF at several quality settings (13.7 MB to as low as 201 KB at the lowest quality tried), leaves a PDF with no pictures untouched and now reports that case explicitly, leaves pages with real text alone |
 | Bookmarks (`PdfBookmarks`) on real PDFs | Add, remove, nesting, bad page/index | Reads back correctly with `pypdf`; a failed add/remove leaves no stray output file |
@@ -41,7 +41,7 @@ At the time it was written, round 5 could not be compiled: the fixes were checke
 
 | Check | How | Result |
 |---|---|---|
-| Unit tests (pure Kotlin: page selection, page groups, coordinates, shapes, binarize, folders, formatters, card layout, font guess, colour sampling, text diff) | Compiled with a real Kotlin compiler (2.0.21; the project pins 2.4.0) and run under JUnit | 48 of 48 at the time; the current checkout runs 112 of 112 |
+| Unit tests (pure Kotlin: page selection, page groups, coordinates, shapes, binarize, folders, formatters, card layout, font guess, colour sampling, text diff) | Compiled with a real Kotlin compiler (2.0.21; the project pins 2.4.0) and run under JUnit | 48 of 48 at the time; the current checkout runs 116 of 116 |
 | PDF tools on real PDFs (merge, extract, delete, rotate, split, reorder, insert blank, insert from PDF, crop, password add/remove) | Run on desktop PDFBox 2.0.27, outputs checked with qpdf, pdftotext, pdfinfo | Correct; all outputs valid |
 | Form fill (text, check box, radio, drop-down, flatten) | Same | Correct |
 | 500-page file | Merge 500+500, extract, delete, reorder, split, crop, rotate, insert, text edit on page 251, 300 marks on one page, 512 MB heap | All finish in well under a second on a desktop; a phone will be slower |

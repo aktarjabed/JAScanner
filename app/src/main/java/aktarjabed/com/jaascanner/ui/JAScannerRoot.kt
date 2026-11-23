@@ -25,6 +25,7 @@ import aktarjabed.com.jaascanner.container
 import kotlinx.coroutines.CancellationException
 import aktarjabed.com.jaascanner.data.AppSettings
 import aktarjabed.com.jaascanner.data.ThemeMode
+import aktarjabed.com.jaascanner.ui.camera.CameraScanScreen
 import aktarjabed.com.jaascanner.ui.cards.CardScanScreen
 import aktarjabed.com.jaascanner.ui.editor.EditorScreen
 import aktarjabed.com.jaascanner.ui.form.FormScreen
@@ -118,6 +119,7 @@ private fun Navigation(app: AppViewModel) {
                     is Screen.Tool -> ToolScreen(app, screen.kind, screen.preselectedIds)
                     is Screen.Qr -> QrScreen(app)
                     is Screen.Cards -> CardScanScreen(app, screen.id)
+                    is Screen.CameraScan -> CameraScanScreen(app, screen.id)
                     is Screen.Form -> FormScreen(app, screen.documentId)
                     is Screen.Pages -> PagesScreen(app, screen.documentId, screen.id)
                     is Screen.Reader -> ReaderScreen(app, screen.documentId)

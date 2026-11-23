@@ -123,7 +123,10 @@ fun HomeScreen(app: AppViewModel) {
                     throw error
                 } catch (error: Exception) {
                     scanStarting = false
-                    container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
+                    // Google's scanner is a Play services module and is missing on some phones
+                    // (and out of date on others). The built-in camera is the fallback.
+                    container.messenger.post("Google's scanner is not available. Opening this phone's camera instead.")
+                    app.push(Screen.CameraScan())
                 }
             }
         }
@@ -288,6 +291,13 @@ fun HomeScreen(app: AppViewModel) {
                             onClick = {
                                 scanMenu = false
                                 app.push(Screen.Cards())
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Scan with this phone's camera") },
+                            onClick = {
+                                scanMenu = false
+                                app.push(Screen.CameraScan())
                             },
                         )
                         DropdownMenuItem(

@@ -3,13 +3,21 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-         JAScanner's own code declares no permissions. Everything it does goes through a
-         component that asks for access itself, each time, rather than JAScanner holding a
-         standing permission:
-           - Camera: Google's on-device document scanner (play-services-mlkit-document-scanner)
-             is its own Activity; it asks for camera access itself, only while it is on screen.
-             Expect android.permission.CAMERA in a Merged Manifest view from that library, not
-             from this file — JAScanner's own code never requests or checks it.
+         Camera is used only by JAScanner's own fallback camera, for phones where Google's
+         document scanner (play-services-mlkit-document-scanner) is missing or too old. It is
+         requested at runtime with ActivityResultContracts.RequestPermission, only when the user
+         opens that camera, and is never requested in the background. When Google's scanner is
+         used instead, it asks for camera access itself and JAScanner does not need this grant.
+         The feature is optional so the app still installs on a phone without a camera.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- CameraX's own manifest marks a back camera as required; this app still works without one. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" tools:node="replace" />
+
+    <!--
+         Everything else goes through a component that asks for access itself, each time, rather
+         than JAScanner holding a standing permission:
            - Photos and files: picked one at a time through Android's own document/photo picker
              (ActivityResultContracts), which needs no permission from the caller on any
              supported API level.

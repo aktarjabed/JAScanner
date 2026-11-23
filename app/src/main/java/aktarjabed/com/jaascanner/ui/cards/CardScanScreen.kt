@@ -120,7 +120,7 @@ fun CardScanScreen(app: AppViewModel, screenId: Long) {
                         throw error
                     } catch (error: Exception) {
                         scanStarting = false
-                        container.messenger.post("The scanner is not available. Check that Google Play services is up to date.")
+                        container.messenger.post("Google's scanner is not available. Use Gallery below to add this side instead.")
                     }
                 }
             }

@@ -210,8 +210,9 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             )
             PermissionRow(
                 title = "Camera",
-                detail = "JAScanner's own code never asks for it. Scanning opens Google's own scanner, which " +
-                    "asks you for camera access itself, only while it's on screen; JAScanner never holds that permission.",
+                detail = "Google's scanner asks for camera access itself. If it is not available, JAScanner's " +
+                    "built-in camera asks only when you open that screen, never at launch and never in the " +
+                    "background. You can refuse and use Photos to PDF instead.",
             )
             PermissionRow(
                 title = "Photos and files",

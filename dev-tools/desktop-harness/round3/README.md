@@ -25,7 +25,7 @@ a phone test.
 - `run_unit.sh` — compiles `core/` (minus the two Android-only files), the pure
   `pdf/Shapes.kt`, `pdf/TextRunBuilder.kt` and `pdf/MarkGeometry.kt`, and every unit test under
   `app/src/test` with a plain Kotlin compiler, then runs them under JUnit 4. This is the script
-  that reproduces the **112 tests** reported in `AUDIT.md` and `README.md`. It does not need
+  that reproduces the **116 tests** reported in `AUDIT.md` and `README.md`. It does not need
   PDFBox or an Android emulator.
 - `make_fixtures.py` — generates the PDF fixtures the drivers expect (`book.pdf`, `rot.pdf`,
   `scan.pdf`, `scan_boxes.tsv`, `photos.pdf`, and `big500.pdf` with `--big`) using only the
@@ -116,7 +116,7 @@ notes).
   pages (including a duplicate of an already-rotated page) produce the expected page order and
   absolute rotation, verified with `qpdf --check` and `pdftoppm`.
 - **`PageList` / `TextReflow` / `PixelFilters` / `WatermarkLayout` / `TextRunBuilder` /
-  `MarkGeometry`** (pure Kotlin, no PDF involved): covered by `run_unit.sh`'s 112 passing tests,
+  `MarkGeometry`** (pure Kotlin, no PDF involved): covered by `run_unit.sh`'s 116 passing tests,
   not by `build_tc3.sh`.
 
 ## What this does NOT verify

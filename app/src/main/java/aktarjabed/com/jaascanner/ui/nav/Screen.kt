@@ -51,6 +51,9 @@ sealed interface Screen {
 
     data class Cards(override val id: Long = ScreenIds.next()) : Screen
 
+    /** The phone's own camera, used when Google's document scanner is not available. */
+    data class CameraScan(override val id: Long = ScreenIds.next()) : Screen
+
     data class Form(val documentId: Long, override val id: Long = ScreenIds.next()) : Screen
 
     /** Page thumbnails: drag to reorder, rotate, delete, duplicate. */

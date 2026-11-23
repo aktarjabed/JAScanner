@@ -6,7 +6,7 @@
 
 Two kinds of apps dominate this space: **PDF readers/editors** (view, annotate, sign, organise, protect) and **document scanners** (capture, crop, clean up, OCR, search). Users end up installing both. JAScanner puts the useful core of each into one small, ad-free, private app:
 
-1. Capture with great edge detection and clean-up (delegated to Google's on-device scanner).
+1. Capture with great edge detection and clean-up (delegated to Google's on-device scanner, with a built-in CameraX fallback when that module is missing).
 2. Keep everything in one searchable library, including text found *inside* scans.
 3. Do the everyday PDF jobs without a subscription: read, mark up, sign, merge, split, rotate, delete, compress, protect, convert, print, share.
 
@@ -48,7 +48,7 @@ AppContainer (hand-written DI, one per process)
 Choices and why:
 
 - **No Hilt, no Navigation library.** Fewer moving parts and fewer version couplings to break on first sync. A tiny stack in `AppViewModel` plus one `ViewModelStoreOwner` per screen gives per-screen ViewModels with correct clean-up.
-- **Google Play services document scanner** instead of custom OpenCV: edge detection, perspective correction, filters and gallery import without shipping a computer-vision stack or camera permission handling.
+- **Google Play services document scanner** instead of custom OpenCV: edge detection, perspective correction, filters and gallery import without shipping a computer-vision stack. A small **CameraX fallback** (`ui/camera/`) takes over when the Play services module is missing or out of date; it asks for `CAMERA` at runtime with `ActivityResultContracts.RequestPermission`, only on its own screen.
 - **Platform `PdfRenderer`** for viewing (fast, no native libs); only one page may be open at a time, so every render is serialised by a mutex in `PdfPageRenderer`.
 - **PDFBox-Android** for changing PDFs (merge, split, rotate, delete, protect, unlock, stamps, strokes).
 - **Edits are always saved as a new document**; originals are never rewritten.
@@ -120,6 +120,7 @@ See the file listing in the appendix at the end of this file.
 - ID card: scan front and back with camera, rescan one side, add a third side from the gallery, save on one page and as separate pages; check the card prints at about 8.6 cm wide.
 - Editor memory: choose a colour, leave and reopen the editor; Settings, Forget editor memory.
 - Select tool: select each kind of mark (pen, highlighter, box highlight, line, rectangle, signature, picture, typed text, edited word, sticky note); drag it to move, drag the corner dot to resize, then delete it. Check a mark at the page edge stops at the edge, a thin diagonal stroke is only picked on the line itself, and the saved PDF matches what the editor showed.
+- Camera fallback: on a phone without Google Play services (or with the scanner module removed), tap Scan: the message should say Google's scanner is unavailable and the built-in camera should open. Allow the camera prompt, take 2 pages, tap Undo last, take it again, Done; check the saved PDF has the right pages. Open "Scan with this phone's camera" from the Scan menu directly. Deny the permission twice: the screen must offer Open app settings, and Photos to PDF must still work. Rotate the phone while the camera screen is open and confirm captured pages are not lost.
 
 - Races: double-tap "Apply" in the text editor and the Home scan button as fast as possible; only one edit / one scanner launch must happen. Tap Save twice in a tool.
 - Dialog reset: rename two documents at the same list position one after the other; the second dialog must show that document's current name, not the first one's leftover text. Repeat for New folder, Add bookmark and the editor's note dialog.
