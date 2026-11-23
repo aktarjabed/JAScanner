@@ -23,18 +23,20 @@ a phone test.
   — the main class is Kotlin's generated name for a driver's top-level `main`, i.e. the file name
   with `Kt` appended (`TextLayerTest.kt` → `TextLayerTestKt`).
 - `run_unit.sh` — compiles `core/` (minus the two Android-only files), the pure
-  `pdf/Shapes.kt` and `pdf/TextRunBuilder.kt`, and every unit test under `app/src/test` with a
-  plain Kotlin compiler, then runs them under JUnit 4. This is the script that reproduces the
-  **99 tests** reported in `AUDIT.md` and `README.md`. It does not need PDFBox or an Android
-  emulator.
+  `pdf/Shapes.kt`, `pdf/TextRunBuilder.kt` and `pdf/MarkGeometry.kt`, and every unit test under
+  `app/src/test` with a plain Kotlin compiler, then runs them under JUnit 4. This is the script
+  that reproduces the **112 tests** reported in `AUDIT.md` and `README.md`. It does not need
+  PDFBox or an Android emulator.
 - `make_fixtures.py` — generates the PDF fixtures the drivers expect (`book.pdf`, `rot.pdf`,
   `scan.pdf`, `scan_boxes.tsv`, `photos.pdf`, and `big500.pdf` with `--big`) using only the
   Python standard library. Run `python3 make_fixtures.py` from this folder (or pass an output
   directory). No third-party packages and no downloaded PDFs are needed.
 - `drivers/Smoke.kt`, `TextLayerTest.kt`, `RotTest.kt`, `PdfFeatures.kt` — the actual test code
   that was run.
-- `kstub_Stubs.kt`, `Stubs3.kt`, `ktest_stub/Stub.kt`, `ktest_stub/Stub2.kt` — the Android/PDFBox
-  stand-ins these drivers and tests compiled against.
+- `kstub_Stubs.kt`, `Stubs3.kt`, `ktest_stub/Stub.kt`, `ktest_stub/Stub2.kt`,
+  `ktest_stub/MarkStubs.kt`, `ktest_stub/BitmapStub.kt` — the Android/PDFBox stand-ins these
+  drivers and tests compiled against. `MarkStubs.kt` mirrors the editor's mark types so
+  `MarkGeometry.kt` and its test can run without Android; update it when those types change.
 
 Both scripts use `set -euo pipefail` and fail when the Kotlin compiler exits non-zero; compiler
 output is captured to `compile.log` and shown on failure. The earlier scripts ended the compiler
@@ -113,8 +115,9 @@ notes).
 - **Rearrange** (`PagePlan` / `PdfTools.rearrange`): reordering, rotating, deleting and duplicating
   pages (including a duplicate of an already-rotated page) produce the expected page order and
   absolute rotation, verified with `qpdf --check` and `pdftoppm`.
-- **`PageList` / `TextReflow` / `PixelFilters` / `WatermarkLayout` / `TextRunBuilder`** (pure
-  Kotlin, no PDF involved): covered by `run_unit.sh`'s 99 passing tests, not by `build_tc3.sh`.
+- **`PageList` / `TextReflow` / `PixelFilters` / `WatermarkLayout` / `TextRunBuilder` /
+  `MarkGeometry`** (pure Kotlin, no PDF involved): covered by `run_unit.sh`'s 112 passing tests,
+  not by `build_tc3.sh`.
 
 ## What this does NOT verify
 

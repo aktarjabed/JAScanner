@@ -68,6 +68,10 @@ class TextEditMark(
     val backgroundArgb: Int,
     /** null = match the original font; otherwise draw in this handwriting-style face. */
     val face: TextFace? = null,
+    /** The word as it was before the Select tool moved or resized the edit. */
+    val sourceWord: TextWord = word,
+    /** True once the Select tool moved or resized it: the page's own text can no longer be edited in place. */
+    val layoutChanged: Boolean = false,
 ) : Mark
 
 /**
@@ -99,7 +103,7 @@ object PdfEditor {
                         if (allMarks.isEmpty() || pageIndex !in 0 until document.numberOfPages) continue
                         // Text edits first: those the original font can draw change the page's own text.
                         val marks = allMarks.filter { mark ->
-                            if (mark !is TextEditMark || mark.face != null) return@filter true
+                            if (mark !is TextEditMark || mark.face != null || mark.layoutChanged) return@filter true
                             val done = runCatching {
                                 PdfTextReplace.replaceInPlace(document, mark.word, mark.newText) == PdfTextReplace.Outcome.Done
                             }.getOrDefault(false)
@@ -284,11 +288,12 @@ object PdfEditor {
         images: IdentityHashMap<Bitmap, PDImageXObject>,
     ): Boolean {
         val word = mark.word
+        val source = mark.sourceWord
         val displayedWidth = PdfCoordinateMapper.displayedWidth(box, rotation)
         val displayedHeight = if (PdfCoordinateMapper.normalizeRotation(rotation) % 180 == 0) box.height else box.width
         val sizePt = word.fontSizeFrac * displayedWidth
         val padU = sizePt * COVER_SIDE_PAD / displayedWidth
-        val oldWidthPt = (word.u1 - word.u0) * displayedWidth
+        val oldWidthPt = (source.u1 - source.u0) * displayedWidth
 
         val face = mark.face
         val bitmap: Bitmap?
@@ -305,7 +310,7 @@ object PdfEditor {
             content,
             box,
             rotation,
-            FillRectMark(word.u0 - padU, word.v0, word.u1 + padU, word.v1, mark.backgroundArgb),
+            FillRectMark(source.u0 - padU, source.v0, source.u1 + padU, source.v1, mark.backgroundArgb),
         )
 
         if (bitmap != null) {

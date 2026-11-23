@@ -73,7 +73,9 @@ if ! java -cp "$COMPILER_CP" \
   $(find "$R/main/java/aktarjabed/com/jaascanner/core" -name "*.kt" ! -name ContextExt.kt ! -name TaskExt.kt) \
   "$R/main/java/aktarjabed/com/jaascanner/pdf/Shapes.kt" \
   "$R/main/java/aktarjabed/com/jaascanner/pdf/TextRunBuilder.kt" \
+  "$R/main/java/aktarjabed/com/jaascanner/pdf/MarkGeometry.kt" \
   "$HERE/ktest_stub/Stub.kt" "$HERE/ktest_stub/Stub2.kt" \
+  "$HERE/ktest_stub/MarkStubs.kt" "$HERE/ktest_stub/BitmapStub.kt" \
   $(find "$R/test" -name "*.kt") >"$COMPILE_LOG" 2>&1
 then
   cat "$COMPILE_LOG" >&2

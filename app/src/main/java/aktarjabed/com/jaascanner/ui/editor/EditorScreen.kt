@@ -56,6 +56,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -71,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import aktarjabed.com.jaascanner.pdf.FillRectMark
 import aktarjabed.com.jaascanner.pdf.Mark
+import aktarjabed.com.jaascanner.pdf.MarkBox
+import aktarjabed.com.jaascanner.pdf.MarkGeometry
 import aktarjabed.com.jaascanner.pdf.NoteMark
 import aktarjabed.com.jaascanner.pdf.NormPoint
 import aktarjabed.com.jaascanner.pdf.Shapes
@@ -172,6 +175,8 @@ fun EditorScreen(app: AppViewModel, documentId: Long, screenId: Long) {
                 onChooseSignature = { signatureDialog = true },
                 onChooseImage = pickImage,
                 onFace = vm::setTextFace,
+                onDeleteSelected = vm::deleteSelected,
+                onClearSelection = vm::clearSelection,
             )
             Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
                 when {
@@ -192,16 +197,23 @@ fun EditorScreen(app: AppViewModel, documentId: Long, screenId: Long) {
                             ) {
                                 items(count = source.pageCount, key = { it }) { index ->
                                     val pageMarks = state.marks.filter { it.page == index }.map { it.mark }
+                                    val aspect = source.heightOverWidth(index)
+                                    val selected = state.selected?.takeIf { it.page == index }?.mark
                                     PageView(source = source, index = index, width = pageWidth, night = false) {
                                         PageOverlay(
                                             tool = state.tool,
                                             marks = pageMarks,
+                                            selected = selected,
                                             penColor = state.penColor,
                                             highlightColor = state.highlightColor,
                                             penWidth = state.penWidth,
-                                            aspect = source.heightOverWidth(index),
+                                            aspect = aspect,
                                             onMark = { vm.addMark(index, it) },
                                             onTap = { u, v -> vm.placeStamp(index, u, v) },
+                                            onSelect = { u, v -> vm.selectAt(index, u, v, aspect) },
+                                            onSelectStart = { u, v -> vm.startDrag(index, u, v, aspect) },
+                                            onSelectDrag = { u, v -> vm.dragTo(u, v, aspect) },
+                                            onSelectEnd = vm::endDrag,
                                         )
                                     }
                                 }
@@ -249,6 +261,7 @@ fun EditorScreen(app: AppViewModel, documentId: Long, screenId: Long) {
 
 private val TOOL_LABELS = listOf(
     EditorTool.Hand to "Scroll",
+    EditorTool.Select to "Select",
     EditorTool.EditText to "Edit text",
     EditorTool.Pen to "Pen",
     EditorTool.Highlighter to "Highlight",
@@ -277,6 +290,8 @@ private fun ToolBar(
     onChooseSignature: () -> Unit,
     onChooseImage: () -> Unit,
     onFace: (TextFace) -> Unit,
+    onDeleteSelected: () -> Unit,
+    onClearSelection: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
@@ -348,6 +363,23 @@ private fun ToolBar(
                         state.recentTexts.forEach { recent ->
                             FilterChip(selected = false, onClick = { onText(recent) }, label = { Text(recent.take(24)) })
                         }
+                    }
+                }
+            }
+            EditorTool.Select -> Column {
+                Hint(
+                    "Tap a mark to select it. Drag it to move, or drag the corner dot to resize. " +
+                        "Use Scroll to move the page.",
+                )
+                Row(
+                    Modifier.padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = onDeleteSelected, enabled = state.selected != null) {
+                        Text("Delete selected")
+                    }
+                    if (state.selected != null) {
+                        TextButton(onClick = onClearSelection) { Text("Deselect") }
                     }
                 }
             }
@@ -437,12 +469,17 @@ private fun shapeMark(
 private fun PageOverlay(
     tool: EditorTool,
     marks: List<Mark>,
+    selected: Mark?,
     penColor: Int,
     highlightColor: Int,
     penWidth: Float,
     aspect: Float,
     onMark: (Mark) -> Unit,
     onTap: (Float, Float) -> Unit,
+    onSelect: (Float, Float) -> Unit,
+    onSelectStart: (Float, Float) -> Boolean,
+    onSelectDrag: (Float, Float) -> Unit,
+    onSelectEnd: () -> Unit,
 ) {
     val live = remember { mutableStateListOf<NormPoint>() }
     var dragStart by remember { mutableStateOf<NormPoint?>(null) }
@@ -518,6 +555,50 @@ private fun PageOverlay(
                 )
             }
         }
+        // Two separate pointerInput modifiers: detectTapGestures and detectDragGestures both
+        // suspend for the whole gesture, so putting them in one block would leave the drag
+        // detector idle until the next touch.
+        tool == EditorTool.Select -> Modifier
+            .pointerInput(tool) {
+                detectTapGestures { offset ->
+                    onSelect(
+                        (offset.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f),
+                        (offset.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f),
+                    )
+                }
+            }
+            .pointerInput(tool, aspect) {
+                fun normalise(offset: Offset) = NormPoint(
+                    (offset.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f),
+                    (offset.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f),
+                )
+                var dragging = false
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val point = normalise(offset)
+                        dragging = onSelectStart(point.u, point.v)
+                    },
+                    onDrag = { change, _ ->
+                        if (dragging) {
+                            change.consume()
+                            val point = normalise(change.position)
+                            onSelectDrag(point.u, point.v)
+                        }
+                    },
+                    onDragEnd = {
+                        if (dragging) {
+                            dragging = false
+                            onSelectEnd()
+                        }
+                    },
+                    onDragCancel = {
+                        if (dragging) {
+                            dragging = false
+                            onSelectEnd()
+                        }
+                    },
+                )
+            }
         else -> Modifier
     }
 
@@ -528,6 +609,10 @@ private fun PageOverlay(
     } else {
         null
     }
+
+    val selectionBox = selected?.let { MarkGeometry.box(it, aspect) }
+    val selectionResizable = selected?.let { MarkGeometry.canResize(it) } ?: false
+    val selectionColor = MaterialTheme.colorScheme.primary
 
     Canvas(Modifier.fillMaxSize().then(gestures)) {
         for (mark in marks) drawMark(mark)
@@ -540,6 +625,29 @@ private fun PageOverlay(
                 alpha = if (highlighter) HIGHLIGHT_ALPHA else 1f,
             )
         }
+        selectionBox?.let { drawSelection(it, selectionResizable, selectionColor) }
+    }
+}
+
+/** Dashed frame around the selected mark, with a filled grab dot for resizing. */
+private fun DrawScope.drawSelection(box: MarkBox, resizable: Boolean, color: Color) {
+    val left = box.u0 * size.width
+    val top = box.v0 * size.height
+    val right = box.u1 * size.width
+    val bottom = box.v1 * size.height
+    drawRect(
+        color = color,
+        topLeft = Offset(left, top),
+        size = Size((right - left).coerceAtLeast(1f), (bottom - top).coerceAtLeast(1f)),
+        style = Stroke(
+            width = 1.5.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 6f)),
+        ),
+    )
+    if (resizable) {
+        val radius = 7.dp.toPx()
+        drawCircle(color, radius = radius, center = Offset(right, bottom))
+        drawCircle(Color.White, radius = radius * 0.5f, center = Offset(right, bottom))
     }
 }
 
@@ -602,13 +710,18 @@ private fun DrawScope.drawStrokePoints(points: List<NormPoint>, colorArgb: Int, 
 /** On-screen preview of an edited word: a patch in the page colour with the new text on top. */
 private fun DrawScope.drawTextEditPreview(mark: TextEditMark) {
     val word = mark.word
-    val pad = word.fontSizeFrac * size.width * 0.12f
-    val left = word.u0 * size.width - pad
-    val top = word.v0 * size.height
+    val source = mark.sourceWord
+    // The cover stays over the original word; the new text is drawn where the user put it.
+    val pad = source.fontSizeFrac * size.width * 0.12f
+    val left = source.u0 * size.width - pad
+    val top = source.v0 * size.height
     drawRect(
         color = Color(mark.backgroundArgb),
         topLeft = Offset(left, top),
-        size = Size((word.u1 - word.u0) * size.width + 2 * pad, (word.v1 - word.v0) * size.height),
+        size = Size(
+            (source.u1 - source.u0) * size.width + 2 * pad,
+            (source.v1 - source.v0) * size.height,
+        ),
     )
     val guess = aktarjabed.com.jaascanner.core.FontGuessing.guess(word.fontName)
     val face = mark.face

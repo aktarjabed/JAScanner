@@ -12,7 +12,7 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 | Privacy | Account and cloud centred | Listing says data may be shared and cannot be deleted | Files stay on the phone; own manifest declares no permissions (verify the Merged Manifest) |
 | Scan + PDF tools in one app | Reader only (scans come from a separate Adobe Scan app) | Scanner with basic PDF tools | One library for both |
 | Search inside scans | OCR is paid | OCR listed as "upcoming" | On-device OCR feeds library search |
-| Editing marks | Free tier: comments, highlight, fill and sign | Not listed | Pen widths, box highlight, line, arrow, rectangle, ellipse, white-out, text, signature, pictures, undo/redo |
+| Editing marks | Free tier: comments, highlight, fill and sign | Not listed | Pen widths, box highlight, line, arrow, rectangle, ellipse, white-out, text, signature, pictures, select/move/resize/delete marks, undo/redo |
 | Forms | Fill and sign (free) | Not listed | Text, check box, radio, drop-down fields, optional flatten |
 | Page tools | Paid | Split, images to PDF | Merge, split by parts or ranges, reorder, insert blank or from another PDF, rotate, delete, trim, A0-A6 |
 | Image clean-up | n/a | Premium filters | Enhanced, grayscale, shadow-tolerant black and white, free |
@@ -27,10 +27,10 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 
 ## 3. Editing: what is implemented and what is not
 
-Implemented: pen, highlighter, box highlight, line, arrow, rectangle, ellipse, white-out, typed text, signature, pictures, undo/redo, form filling.
+Implemented: pen, highlighter, box highlight, line, arrow, rectangle, ellipse, white-out, typed text, signature, pictures, select/move/resize/delete marks, undo/redo, form filling.
 
 Not implemented:
-1. Move, resize, recolour or delete a single mark after placing it.
+1. Recolour a mark after placing it. Moving, resizing and deleting are `[done]` — the Select tool (`pdf/MarkGeometry.kt`, `ui/editor/EditorViewModel.kt`): tap a mark to select it, drag to move, drag the corner dot to resize, then Delete selected.
 2. Highlight, underline and strikeout that snap to real text.
 3. ~~Sticky notes and comments as real PDF annotations.~~ `[done]` — `PdfNotes`, the editor's Note tool, the viewer's Marks panel.
 4. Edit or replace existing text and images in the PDF.
@@ -45,7 +45,7 @@ Not implemented:
 ## 4. Plan v2 (in order)
 
 ### Phase 0: make it real (blocks everything)
-- ~~Compile it and run the unit tests.~~ `[done]` — `./gradlew :app:testDebugUnitTest` (99 tests) and `:app:assembleDebug` succeed on Termux.
+- ~~Compile it and run the unit tests.~~ `[done]` — `./gradlew :app:testDebugUnitTest` (112 tests) and `:app:assembleDebug` succeed on Termux.
 - Run on a real phone: scan, import, every tool once, form fill, app lock. Check the Merged Manifest for added permissions.
 - Test the database migrations (1→2 and 2→3) on a phone that had an earlier build.
 - Exit: debug build installs and the test plan in PLAN.md section 7 passes.
@@ -53,7 +53,7 @@ Not implemented:
 ### Phase 1: editing that people notice
 | Item | How | Risk |
 |---|---|---|
-| Select, move, resize, delete marks | Keep marks in the editor state; add a Select tool with hit-testing and drag handles; the PDF is only written on Save | Medium |
+| ~~Select, move, resize, delete marks~~ `[done]` | Built as planned: marks stay in the editor state, `MarkGeometry` does pure-Kotlin hit-testing, movement and scaling (strokes are hit-tested on their path, not their bounding box), and the PDF is only written on Save. Recolouring is still open | — |
 | Text-snapped highlight / underline / strikeout | PDFTextStripper with text positions gives word boxes; tap or drag selects words; draw fill or line marks with existing code | Medium |
 | ~~Sticky notes and comments~~ `[done]` | Built as planned: `PDAnnotationText` via `PdfNotes`, a Note tool in the editor, a Marks panel in the viewer | — |
 | Redo and per-page clear | Small state changes | Low |

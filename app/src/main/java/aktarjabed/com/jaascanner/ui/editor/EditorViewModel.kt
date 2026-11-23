@@ -14,6 +14,8 @@ import aktarjabed.com.jaascanner.data.EditorMemory
 import aktarjabed.com.jaascanner.data.db.DocumentEntity
 import aktarjabed.com.jaascanner.pdf.ImageDecoding
 import aktarjabed.com.jaascanner.pdf.Mark
+import aktarjabed.com.jaascanner.pdf.MarkBox
+import aktarjabed.com.jaascanner.pdf.MarkGeometry
 import aktarjabed.com.jaascanner.pdf.NoteMark
 import aktarjabed.com.jaascanner.pdf.PdfEditor
 import aktarjabed.com.jaascanner.pdf.PdfPageSource
@@ -42,6 +44,7 @@ import kotlinx.coroutines.withContext
 
 enum class EditorTool {
     Hand,
+    Select,
     Pen,
     Highlighter,
     Line,
@@ -88,6 +91,8 @@ data class EditorUiState(
     val textScale: Float = 1f,
     val marks: List<PlacedMark> = emptyList(),
     val undone: List<PlacedMark> = emptyList(),
+    /** The mark selected with the Select tool, if any. */
+    val selected: PlacedMark? = null,
     val signature: Bitmap? = null,
     val image: Bitmap? = null,
     val text: String = "",
@@ -130,6 +135,15 @@ class EditorViewModel(
     /** Word taps can arrive from several UI coroutines at once; reads must be thread-safe. */
     private val wordCache = ConcurrentHashMap<Int, List<TextWord>>()
 
+    // A select-tool drag is computed from the mark as it was when the finger went down, not from
+    // the previous drag event: clamping every step would otherwise make a mark crawl near an edge.
+    private var dragOrigin: Mark? = null
+    private var dragBox: MarkBox? = null
+    private var dragIndex = -1
+    private var dragStartU = 0f
+    private var dragStartV = 0f
+    private var dragResize = false
+
     private fun persist() {
         val current = mutableState.value
         val memory = EditorMemory(
@@ -155,7 +169,9 @@ class EditorViewModel(
         persist()
     }
 
-    fun setTool(tool: EditorTool) = mutableState.update { it.copy(tool = tool) }
+    fun setTool(tool: EditorTool) = mutableState.update {
+        it.copy(tool = tool, selected = if (tool == EditorTool.Select) it.selected else null)
+    }
 
     fun setPenColor(color: Int) {
         mutableState.update { it.copy(penColor = color) }
@@ -221,20 +237,115 @@ class EditorViewModel(
     }
 
     fun addMark(page: Int, mark: Mark) {
-        mutableState.update { it.copy(marks = it.marks + PlacedMark(page, mark), undone = emptyList()) }
+        endDrag()
+        mutableState.update {
+            it.copy(marks = it.marks + PlacedMark(page, mark), undone = emptyList(), selected = null)
+        }
     }
 
     fun undo() {
+        endDrag()
         mutableState.update { current ->
             val last = current.marks.lastOrNull() ?: return@update current
-            current.copy(marks = current.marks.dropLast(1), undone = current.undone + last)
+            current.copy(marks = current.marks.dropLast(1), undone = current.undone + last, selected = null)
         }
     }
 
     fun redo() {
+        endDrag()
         mutableState.update { current ->
             val last = current.undone.lastOrNull() ?: return@update current
-            current.copy(marks = current.marks + last, undone = current.undone.dropLast(1))
+            current.copy(marks = current.marks + last, undone = current.undone.dropLast(1), selected = null)
+        }
+    }
+
+    /** Selects the topmost mark under a tap, or clears the selection when nothing is there. */
+    fun selectAt(page: Int, u: Float, v: Float, aspect: Float) {
+        val hit = mutableState.value.marks.asReversed()
+            .firstOrNull { it.page == page && MarkGeometry.contains(it.mark, aspect, u, v) }
+        mutableState.update { it.copy(selected = hit) }
+    }
+
+    fun clearSelection() = mutableState.update { it.copy(selected = null) }
+
+    /**
+     * Starts a drag with the Select tool. Returns true when the finger went down on the selected
+     * mark or its resize handle, so the caller knows to move/resize instead of scrolling.
+     */
+    fun startDrag(page: Int, u: Float, v: Float, aspect: Float): Boolean {
+        val current = mutableState.value
+        val selected = current.selected
+        val selectedBox = selected
+            ?.takeIf { it.page == page }
+            ?.let { MarkGeometry.box(it.mark, aspect) }
+        val onHandle = selected != null && selectedBox != null &&
+            MarkGeometry.canResize(selected.mark) &&
+            MarkGeometry.onHandle(selectedBox, aspect, u, v)
+        val onSelected = selectedBox != null &&
+            selectedBox.contains(u, v, MarkGeometry.HIT_TOLERANCE, aspect)
+        val index = when {
+            selected != null && (onHandle || onSelected) ->
+                current.marks.indexOfFirst { it === selected }
+            else -> current.marks.indexOfLast {
+                it.page == page && MarkGeometry.contains(it.mark, aspect, u, v)
+            }
+        }
+        if (index < 0) {
+            mutableState.update { it.copy(selected = null) }
+            return false
+        }
+        val placed = current.marks[index]
+        dragOrigin = placed.mark
+        dragBox = MarkGeometry.box(placed.mark, aspect)
+        dragIndex = index
+        dragStartU = u
+        dragStartV = v
+        dragResize = onHandle
+        mutableState.update { it.copy(selected = placed) }
+        return true
+    }
+
+    /** Moves or resizes the dragged mark; [u] and [v] are the finger's page position. */
+    fun dragTo(u: Float, v: Float, aspect: Float) {
+        val origin = dragOrigin ?: return
+        val box = dragBox ?: return
+        val updated = if (dragResize) {
+            MarkGeometry.resized(origin, aspect, box, u, v)
+        } else {
+            val (du, dv) = MarkGeometry.clampMove(origin, aspect, u - dragStartU, v - dragStartV)
+            MarkGeometry.moved(origin, du, dv)
+        }
+        replaceMark(dragIndex, updated)
+    }
+
+    fun endDrag() {
+        dragOrigin = null
+        dragBox = null
+        dragIndex = -1
+        dragResize = false
+    }
+
+    /** Removes the selected mark. */
+    fun deleteSelected() {
+        endDrag()
+        mutableState.update { current ->
+            val selected = current.selected ?: return@update current
+            val index = current.marks.indexOfFirst { it === selected }
+            if (index < 0) return@update current.copy(selected = null)
+            current.copy(
+                marks = current.marks.filterIndexed { i, _ -> i != index },
+                selected = null,
+            )
+        }
+    }
+
+    private fun replaceMark(index: Int, mark: Mark) {
+        mutableState.update { current ->
+            if (index !in current.marks.indices) return@update current
+            val marks = current.marks.toMutableList()
+            val placed = marks[index].copy(mark = mark)
+            marks[index] = placed
+            current.copy(marks = marks, selected = placed)
         }
     }
 

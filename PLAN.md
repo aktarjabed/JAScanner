@@ -76,6 +76,7 @@ Stamps are drawn centred and rotated by the page rotation (plus any watermark ti
 | Library, folders, favourites, text search | `data/DocumentRepository`, `ui/home/Library*` |
 | Viewer, zoom, night mode, find | `ui/viewer/*`, `pdf/PdfPageSource`, `pdf/PdfTextExtractor` |
 | Pen, highlighter, shapes, white-out, text, signature, pictures | `ui/editor/*`, `pdf/PdfEditor`, `pdf/Shapes`, `data/SignatureStore` |
+| Select, move, resize, delete a placed mark | `pdf/MarkGeometry`, `ui/editor/EditorScreen`, `ui/editor/EditorViewModel` |
 | Image clean-up filters, adaptive black and white | `pdf/ImageFilters`, `core/Binarize` |
 | Pinch-to-zoom | `ui/components/Pinch` |
 | Merge, extract, split (equal or ranges), rotate, delete | `pdf/PdfTools`, `core/PageGroups`, `ui/tools/*` |
@@ -118,6 +119,7 @@ See the file listing in the appendix at the end of this file.
 - 500 pages: import or create a 500-page PDF, open in viewer, editor, run OCR, merge. Set Settings, Pages per scan to 500 and see whether the scanner accepts it.
 - ID card: scan front and back with camera, rescan one side, add a third side from the gallery, save on one page and as separate pages; check the card prints at about 8.6 cm wide.
 - Editor memory: choose a colour, leave and reopen the editor; Settings, Forget editor memory.
+- Select tool: select each kind of mark (pen, highlighter, box highlight, line, rectangle, signature, picture, typed text, edited word, sticky note); drag it to move, drag the corner dot to resize, then delete it. Check a mark at the page edge stops at the edge, a thin diagonal stroke is only picked on the line itself, and the saved PDF matches what the editor showed.
 
 - Races: double-tap "Apply" in the text editor and the Home scan button as fast as possible; only one edit / one scanner launch must happen. Tap Save twice in a tool.
 - Dialog reset: rename two documents at the same list position one after the other; the second dialog must show that document's current name, not the first one's leftover text. Repeat for New folder, Add bookmark and the editor's note dialog.
@@ -149,7 +151,7 @@ Round 3 (31 Oct 2026) built several of these — done items are struck through a
 - Multi-select lists in forms; a visual crop preview; ~~bookmarks~~ `[done]` — `pdf/PdfBookmarks.kt`, the viewer's Marks panel. A table of contents as its own view (distinct from the Marks panel's flat/nested list) is still open.
 - Underline and strikeout are still open. ~~Sticky-note comments~~ `[done]` — `pdf/PdfNotes.kt`, the editor's Note tool and the viewer's Marks panel. ~~Image (logo) watermark~~ `[done]` — the Watermark tool's Picture mode, which can also repeat across the page. ~~Read aloud~~ `[done]` — `ui/reader/ReadAloud.kt`, reached from the viewer's Read tab, alongside a text-reflow reading mode.
 - Zoom about the fingers' focal point and double-tap zoom are still open.
-- Move, resize and delete single marks in the editor (today only undo and redo); text-selection highlight and underline.
+- ~~Move, resize and delete single marks in the editor (today only undo and redo).~~ `[done]` — the Select tool in the editor, backed by `pdf/MarkGeometry.kt`. Text-selection highlight and underline are still open.
 - Batch export to a user-chosen folder (SAF tree).
 - Widget and quick-settings tile for "Scan".
 - Still not attempted at all: Office (Word/Excel/PowerPoint) export and import, cloud upload, an AI assistant, fax — see `COMPARISON.md` section 6 for why these were left out of round 3.
@@ -206,6 +208,7 @@ app/src/main/java/aktarjabed/com/jaascanner/pdf/BitmapImageRecoder.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/ImageDecoding.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/ImageFilters.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/PageImageExporter.kt
+app/src/main/java/aktarjabed/com/jaascanner/pdf/MarkGeometry.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/PdfBookmarks.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/PdfEditor.kt
 app/src/main/java/aktarjabed/com/jaascanner/pdf/PdfForms.kt
@@ -286,6 +289,7 @@ app/src/test/java/aktarjabed/com/jaascanner/core/ShapesBinarizeTest.kt
 app/src/test/java/aktarjabed/com/jaascanner/core/TextEditCoreTest.kt
 app/src/test/java/aktarjabed/com/jaascanner/core/TextSearchTest.kt
 app/src/test/java/aktarjabed/com/jaascanner/core/WatermarkLayoutTest.kt
+app/src/test/java/aktarjabed/com/jaascanner/pdf/MarkGeometryTest.kt
 app/src/test/java/aktarjabed/com/jaascanner/pdf/TextRunBuilderTest.kt
 build.gradle.kts
 dev-tools/desktop-harness/Bw.kt
