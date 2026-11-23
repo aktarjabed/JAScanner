@@ -7,6 +7,7 @@
 /app/build/
 /captures/
 /dev-tools/desktop-harness/round3/out/
+/dev-tools/desktop-harness/round3/pdf/
 .externalNativeBuild/
 .cxx/
 *.apk
