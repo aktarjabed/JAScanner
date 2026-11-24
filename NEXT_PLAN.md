@@ -4,6 +4,39 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 
 **Round 3 update:** the items below marked `[done]` were built and are described in `README.md` and `COMPARISON.md` — an embedded OCR text layer, compress that keeps text, a page-thumbnail grid with drag reorder/rotate/delete/duplicate, bookmarks and sticky-note comments stored inside the PDF, an image/tiled watermark, and a reading mode with read-aloud. Everything else below is still accurate.
 
+## 0. What matters most now (24 Nov 2026)
+
+This section supersedes the ordering in section 4 below and the phase order in `FIX_PLAN.md` for the next release. The reason is that the open issue list no longer reflects the work in it: 22 issues are open, but the fixes for #5-#26 are implemented and compile, and #2/#3 are finished too. What is left is mostly **unverified**, not unwritten. Ranked by what actually blocks a release, not by how much code each item needs.
+
+### P0 - blocks everything
+
+1. **One run of `PLAN.md` section 7 on a real phone.** No fix in #5-#26, no UI claim in `README.md` and no round-4/5/6 statement has ever executed on Android; 116 JVM tests and two Gradle builds are the whole evidence base. This is also the only way to close the tracker. Exit: the debug APK, installed from **Files → Downloads** (Termux cannot `pm install`), taken through section 7 once on a phone with Google Play services, with every failure filed as an issue.
+2. **Play compliance for what round 6 proved.** The merged manifest now demonstrably sends ML Kit telemetry, so no release can be listed before (a) the Data safety form declares device/app identifiers and performance data, collected by a third party, not user-deletable, and (b) a privacy policy URL exists - the repository has neither, and Play requires the policy as soon as collection is declared. Exit: policy page published and linked from `README.md` and the listing, form filled and cross-checked against `AUDIT.md` section 7.
+
+### P1 - cheap, and it stops the repo misdescribing itself
+
+3. **Tracker hygiene.** Close #2 and #3 (both done in `3325315` / `75fb184`), and post one status comment on #1 covering rounds 4-6 and the manifest verification, separating "implemented, awaiting device" from "open". Exit: the issue list can be trusted at a glance.
+4. **Release build foundation.** There is no signing config, no exercised R8/proguard rules, no baseline profile, no versionName/versionCode strategy and no CI workflow (the repository has Actions enabled and zero workflows). Exit: a tagged build produces a signed `app-release.apk` in CI, with `:app:testDebugUnitTest` and `:app:assembleDebug` running on every push.
+
+### P2 - the gaps users actually notice, in value-per-hour order
+
+- Finger-anchored pinch and double-tap zoom (promised in `PLAN.md`, `NEXT_PLAN.md`, `AUDIT.md` and `COMPARISON.md` since round 2; pinch exists, focal-point zoom does not).
+- Recolour a mark after placing it.
+- Text-snapped highlight, underline and strikeout.
+- Visual crop with drag handles (Crop is still percent-from-edge).
+- Table of contents as its own view, then page numbers / headers / footers / Bates numbers.
+- Batch export to a user-chosen SAF folder.
+- First-run tour, bottom selection bar, accessibility labels - TalkBack has never been run on any flow.
+- Home-screen and quick-settings "Scan" tile (the shortcut exists; the tile does not).
+
+### P3 - decide before building
+
+- **Telemetry.** ML Kit exposes no opt-out, so "turn it off" is not a setting this app can add. The real options are: document it and ship (what the code does now); a separate no-Google flavour that drops the Play-services scanner and ML Kit OCR and keeps only the CameraX fallback plus the PDF tools; or a store-listing note only. Needs a decision, not more code.
+- Secure redaction that removes the underlying text.
+- Office export/import, cloud sync, AI assistant and fax stay deliberately out of scope (`COMPARISON.md` section 6).
+
+Three `AUDIT.md` section 4 weak spots should be filed as issues rather than fixed blind: bookmark rewrites losing another reader's colours and collapsed state, axis-aligned OCR boxes on skewed scans, and ~150 MB for black-and-white at 6 MP.
+
 ## 1. Where JAScanner is ahead on paper
 
 | Area | Adobe Acrobat Reader | Document Scanner (com.cv.docscanner) | JAScanner |
