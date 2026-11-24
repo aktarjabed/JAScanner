@@ -226,9 +226,12 @@ fun SettingsContent(modifier: Modifier = Modifier) {
             )
             PermissionRow(
                 title = "Internet",
-                detail = "JAScanner's own code opens no network connection; nothing you scan or create is " +
-                    "uploaded. Google Play services components (scanning, OCR, barcodes) may use their own, " +
-                    "under Google's privacy practices — this is also the one honest exception to \"no internet\".",
+                detail = "JAScanner's own code opens no network connection, and nothing you scan or create " +
+                    "is uploaded. The INTERNET permission comes from Google's ML Kit telemetry library, " +
+                    "which ships with the document scanner: it can send usage and performance metrics " +
+                    "(device and app details, event types, error codes — not your scans) to Google, " +
+                    "under Google's privacy practices. Play services components may also go online to " +
+                    "download their own on-device modules.",
             )
             PermissionRow(
                 title = "Fingerprint, face or screen lock",

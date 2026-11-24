@@ -9,7 +9,7 @@ Comparison is against the two Play Store listings and Adobe's mobile FAQ only. "
 | Area | Adobe Acrobat Reader | Document Scanner (com.cv.docscanner) | JAScanner |
 |---|---|---|---|
 | Price | Merge/organise, compress, password, export and OCR need a subscription | Contains ads and in-app purchases; premium filters | Everything free, no ads, no account |
-| Privacy | Account and cloud centred | Listing says data may be shared and cannot be deleted | Files stay on the phone; one runtime permission of its own (Camera, only for the built-in fallback), no storage or internet permission (verify the Merged Manifest) |
+| Privacy | Account and cloud centred | Listing says data may be shared and cannot be deleted | Files stay on the phone and nothing you scan or create is uploaded; one runtime permission of its own (Camera, only for the built-in fallback) and no storage permission. The merged manifest, checked for debug and release with AGP's manifest merger, does contain `INTERNET` and `ACCESS_NETWORK_STATE`, merged in by Google's ML Kit **datatransport** telemetry (on by default) and AndroidX Media3; that telemetry sends device/app diagnostics and error codes, not documents — see `README.md` |
 | Scan + PDF tools in one app | Reader only (scans come from a separate Adobe Scan app) | Scanner with basic PDF tools | One library for both |
 | Search inside scans | OCR is paid | OCR listed as "upcoming" | On-device OCR feeds library search |
 | Editing marks | Free tier: comments, highlight, fill and sign | Not listed | Pen widths, box highlight, line, arrow, rectangle, ellipse, white-out, text, signature, pictures, select/move/resize/delete marks, undo/redo |

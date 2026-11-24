@@ -10,6 +10,8 @@ Round 5 (13 Nov 2026) was a dedicated bug/robustness/error-handling sweep across
 
 At the time it was written, round 5 could not be compiled: the fixes were checked by the static checker (98 files, 1,896 declarations, all resolve), the desktop unit-test harness (77 tests then; the current suite has **116, all passing**), and close reading for everything in `pdf/`, `data/` and `ui/` that the harness cannot touch (PDFBox-Android, Room, Compose, coroutine lifecycle). The project has since been compiled with Android Gradle on Termux — `:app:testDebugUnitTest` and `:app:assembleDebug` both succeed — so the Kotlin now compiles as a whole. That still does not prove the Android-side fixes at runtime: none of this has been run on a phone. Treat every fix outside `core/` as logically reasoned through, compiled and independently re-checked, not as proven by execution on a device.
 
+Round 6 (24 Nov 2026) settled the one permissions question every earlier round had only inferred. Round 4 added manifest comments and an in-app disclosure that said what the merged manifest *should* contain; this round installed a real Android toolchain (JDK 17, SDK platform 37, build-tools 37.0.0) in a development VM and ran the actual manifest merger, so section 7 below is generated output rather than an expectation. The result changed the privacy wording: `INTERNET` is real, comes from Google's ML Kit telemetry rather than from module downloads, and that telemetry is on by default. `README.md`, the `AndroidManifest.xml` comment, the Settings screen, `COMPARISON.md` and `NEXT_PLAN.md` were corrected to match. Nothing else in the app was touched, and no device or emulator was available, so the uploads themselves were not observed.
+
 ## 0. Round 3: what was actually run
 
 | Check | How | Result |
@@ -127,3 +129,20 @@ A fix-everything pass, not tied to one feature. Found by five parallel reads of 
 **Checked and found correct, no change:** `PageList.delete()`'s refusal to delete every page is intentional, documented behaviour, not a bug; `PdfPageRenderer.pageCountOrZero` genuinely never throws (confirmed by reading `open()`), so the one unguarded call to it is safe; `ToolViewModel.run()` and `OcrIndexer.index()` intentionally run in the app-wide scope so a save survives the user leaving the screen, and both now rethrow `CancellationException` (which fires when that scope itself is cancelled, e.g. process shutdown) instead of reporting it as a tool failure; `LibraryViewModel.deleteFolder()`'s filter-clearing only needs to match the folder's own id because deleting a folder detaches its subfolders rather than deleting them, so a viewed subfolder never disappears out from under the filter; resource handling, bitmap recycling, and the rearrange/rotation math throughout `pdf/` were all re-checked and are sound.
 
 Items 7, 10 and 12 above were completed in the later verification pass: the scan and Apply guards now stay set until their result returns, the ID-card cache deletes the old photo on remove/rescan, and both dialogs reset per target. The code now matches the text. `DocumentRepository.delete()` can leave a document's file on disk if the underlying `File.delete()` call itself fails (rare, no security or correctness impact) — left as is rather than adding complexity for a low-value case.
+
+## 7. Round 6: the merged manifest, actually merged
+
+Run with `./gradlew :app:processDebugMainManifest` and `:app:processReleaseMainManifest`, then read from `app/build/intermediates/merged_manifest/` with the merger's blame reports and `app/build/outputs/logs/manifest-merger-*-report.txt`. Debug and release produce the same permission list; the only component difference is Compose's `PreviewActivity` in debug.
+
+| Permission | Merged from | Why it is there |
+|---|---|---|
+| `CAMERA` | JAScanner's own manifest | The built-in camera fallback; requested at runtime only on that screen |
+| `USE_BIOMETRIC`, `USE_FINGERPRINT` | `androidx.biometric` 1.1.0 | App lock |
+| `ACCESS_NETWORK_STATE` | `androidx.media3-common` 1.9.0 (also declared by `datatransport`) | CameraX video in the fallback camera |
+| `INTERNET` | `com.google.android.datatransport:transport-backend-cct` 2.3.3, pulled in by `play-services-mlkit-document-scanner` 16.0.0 | ML Kit telemetry; nothing in JAScanner's own code opens a connection |
+
+No storage or media permission, no notification permission, no location, no foreground service, no `AD_ID` (explicitly removed). `minSdk` 32, `targetSdk` 36.
+
+**The telemetry sends something.** `transport-backend-cct` registers `TransportBackendDiscovery` with `backend:com.google.android.datatransport.cct.CctBackendFactory` and `JobInfoSchedulerService` in both merged manifests, so the uploader is wired in release builds too. In the AAR bytecode (read with `javap`), CCT's default endpoint decodes — the URL is split across strings and reassembled by `StringMerger` — to `https://firebaselogging.googleapis.com/v0cc/log/batch?format=json_proto3`; `mlkit-common` 18.11.0 enables firelog with event type 1 and its sender calls `Transport.send(Event.ofTelemetry(...))` with no opt-out check. Google's [ML Kit terms](https://developers.google.com/ml-kit/terms) and [data disclosure](https://developers.google.com/ml-kit/android-data-disclosure) describe the payload as device and app information, per-installation identifiers, performance metrics, event types and error codes, and state that images, video and text inputs and outputs stay on-device. No opt-out is documented or present in the bundled classes.
+
+**Not verified:** with no phone or emulator, no upload was observed — not its timing, its frequency, nor whether Google's backend accepts it. Everything above comes from the merged manifests and the library bytecode.

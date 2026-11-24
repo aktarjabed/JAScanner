@@ -21,11 +21,13 @@
            - Photos and files: picked one at a time through Android's own document/photo picker
              (ActivityResultContracts), which needs no permission from the caller on any
              supported API level.
-           - Internet: Play Services components (the document scanner, ML Kit text recognition,
-             the barcode scanner) may declare android.permission.INTERNET and
-             ACCESS_NETWORK_STATE to download their own on-device modules the first time they
-             run, and that is expected in the Merged Manifest too. JAScanner's own code opens no
-             network connection and uploads nothing.
+           - Internet and network state: JAScanner's own code uses neither, but two libraries
+             merge them in. android.permission.INTERNET comes from ML Kit's datatransport
+             (transport-backend-cct), which ships with play-services-mlkit-document-scanner and
+             can upload ML Kit usage and performance metrics to Google's Firebase logging
+             endpoint; ACCESS_NETWORK_STATE is declared by that same telemetry library and by
+             androidx.media3-common (used by CameraX video recording). Neither uploads anything
+             you scan, open or create, and JAScanner itself opens no network connection.
          See the in-app "Privacy & permissions" section (Settings) for the same explanation in
          plain language, and README.md's Privacy section.
     -->

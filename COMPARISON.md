@@ -53,12 +53,12 @@ Key: **Ahead** = JAScanner does it and the listing does not show it for that app
 | Watermark | Not named | New image watermark tool | **Text or your own picture**, stamped once or **repeated across the whole page**. Geometry logic (tiling, placement) **run**; not verified visually on a phone | **Parity** with Document Scanner's image watermark |
 | Folders, subfolders, pin, default folder | Starred files | Yes | Yes, all four. Migration and queries **run** in SQLite | **Parity** |
 | QR and barcodes | Not named | Scan and create | Scan and create | **Parity** |
-| Cloud links and upload | OneDrive, Dropbox, Drive | Drive, Dropbox | None. Share sheet and save-a-copy only | **Missing**; also the reason for no internet permission (not attempted this round) |
+| Cloud links and upload | OneDrive, Dropbox, Drive | Drive, Dropbox | None. Share sheet and save-a-copy only | **Missing**. Upload would need a network stack of JAScanner's own; the `INTERNET` permission already in the merged manifest belongs to Google's ML Kit telemetry, not to any upload code |
 | Print, fax | Print | Print and fax | Print and save as PDF; no fax | **Parity** minus fax (not attempted this round) |
 | Read aloud, AI Assistant | Yes | No | Read aloud: **built**, see above. AI Assistant: **not attempted** this round | **Parity** on read aloud, **Missing** on AI |
 | App lock | Not named | Not named | Biometric / screen lock, hide preview, block screenshots. Phone-untested | **Ahead** (not named by the others) |
 | Ads, accounts, purchases | Ads, purchases | Ads | None in the code | **Ahead**, and the strongest honest point |
-| Data handling | Developer reports sharing with third parties | Developer reports sharing; deletion not possible | JAScanner declares one runtime permission of its own (Camera, only for the built-in scan fallback), no storage or internet permission, and uploads nothing. Google ML Kit pieces follow Google's policies. Merged manifest **not checked** | **Ahead on design**, to be verified |
+| Data handling | Developer reports sharing with third parties | Developer reports sharing; deletion not possible | JAScanner declares one runtime permission of its own (Camera, only for the built-in scan fallback) and no storage permission, and nothing you scan or create is uploaded. The merged manifest was checked for both debug and release: it adds `INTERNET` and `ACCESS_NETWORK_STATE` from Google's ML Kit **datatransport** telemetry (on by default), which sends device/app diagnostics and error codes, never documents; Google ML Kit pieces follow Google's policies | **Ahead on design**; the ML Kit telemetry is the caveat |
 | Maturity | Years of device testing | Years of device testing | Compiled with Gradle and unit-tested; never run on a device | **Far behind** |
 
 ## 4. Scoreboard
@@ -77,7 +77,7 @@ The debug APK is now built at `app/build/outputs/apk/debug/app-debug.apk` (rebui
 
 1. Get a full JDK 17+ and the pinned `jadx-headless-mcp-0.7.1-all.jar`; set `REA_JADX_MCP_JAR` to it. `docs/android-analysis.md` in rea has the download and SHA-256 check.
 2. Run `rea inspect-android-package app-debug.apk` and read:
-   - **Permissions in the merged manifest.** Expect `CAMERA` (the built-in scan fallback), `USE_BIOMETRIC` (App lock) and no storage permission from JAScanner. `INTERNET`/`ACCESS_NETWORK_STATE` come from Play services. This is the one place README's privacy claim gets checked for real.
+   - **Permissions in the merged manifest.** Done for debug and release with `./gradlew :app:processDebugMainManifest`: `CAMERA` (the built-in scan fallback), `USE_BIOMETRIC`/`USE_FINGERPRINT` (App lock), no storage permission of JAScanner's own, `INTERNET` from `transport-backend-cct` (Google's ML Kit datatransport telemetry), and `ACCESS_NETWORK_STATE` from that same library and `androidx.media3-common`. This was the one place README's privacy claim got checked for real; the result is now written into `README.md` and the manifest comment.
    - **Exported components.** Only the main activity, the "Open with" / "Share to" intent filters and the shortcut should be reachable from other apps.
    - **Class and method counts**, to spot anything unexpected after R8 shrinking.
 3. Use `rea inspect-android-class` or `inspect-android-method` only on JAScanner's own classes.
@@ -85,7 +85,7 @@ The debug APK is now built at `app/build/outputs/apk/debug/app-debug.apk` (rebui
 ## 6. What to do next
 
 1. Install the debug APK on a phone and send the first runtime/UI errors back. The project now compiles with Android Gradle on Termux, but round 3's Compose page-grid with drag gestures, the TTS controller and the rest of the UI have still never run on a device. `PLAN.md` section 7 is the checklist.
-2. Deliberately not attempted this round, in rough order of how often the two listings mention them: Office (Word/Excel/PowerPoint) export and import, cloud upload (Drive/Dropbox/OneDrive), an AI assistant, fax. Each would need either a new library (Office formats), a cloud SDK and account system (upload — a real change to the "no internet permission" privacy story), or a different kind of feature entirely (AI). None were started so as not to half-build any of them.
+2. Deliberately not attempted this round, in rough order of how often the two listings mention them: Office (Word/Excel/PowerPoint) export and import, cloud upload (Drive/Dropbox/OneDrive), an AI assistant, fax. Each would need either a new library (Office formats), a cloud SDK and account system (upload — a real change to the privacy story, since today the only network traffic the merged manifest allows is Google's own ML Kit telemetry), or a different kind of feature entirely (AI). None were started so as not to half-build any of them.
 3. Once the app has had a first device test: table of contents as its own view (bookmarks exist but are shown as a flat/nested list, not a TOC page), visual crop with drag handles, select/move/resize/delete a single editor mark after placing it, text-snapped highlight/underline/strikeout.
 
 ## Sources
